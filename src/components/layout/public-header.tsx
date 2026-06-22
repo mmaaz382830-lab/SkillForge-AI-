@@ -28,7 +28,7 @@ export function PublicHeader() {
             )}
             href={publicRoutes.signup}
           >
-            Start Learning Free
+            Start Free
           </Link>
         </nav>
       </Container>

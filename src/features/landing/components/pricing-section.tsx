@@ -10,6 +10,7 @@ const plans = [
     accent: "yellow",
     description: "A starter shell for trying the learning workflow with basic limits later.",
     items: ["Landing demo", "Future note upload", "Future practice modes"],
+    cta: "Start Free",
   },
   {
     name: "Pro / Demo",
@@ -17,13 +18,15 @@ const plans = [
     accent: "green",
     description: "A planned demo tier for showing the full study loop in a portfolio review.",
     items: ["More AI actions later", "Progress workspace", "Interview prep flow"],
+    cta: "Preview Demo Plan",
   },
   {
-    name: "Portfolio Build",
+    name: "MVP Story",
     label: "Builder",
     accent: "blue",
-    description: "The MVP build story: auth, uploads, RAG, quizzes, progress, and deployment.",
+    description: "The planned MVP build story: auth, uploads, RAG, quizzes, progress, and deployment.",
     items: ["Architecture showcase", "Source-grounded learning", "SaaS-style foundations"],
+    cta: "See MVP Story",
   },
 ] as const;
 
@@ -64,7 +67,7 @@ export function PricingSection() {
                 className="pressable inline-flex min-h-11 items-center justify-center rounded-md bg-accent-yellow px-4 py-2.5 text-sm font-black leading-none no-underline hover:bg-accent-yellow"
                 href={publicRoutes.signup}
               >
-                Choose {plan.name}
+                {plan.cta}
               </Link>
             </CardFooter>
           </Card>

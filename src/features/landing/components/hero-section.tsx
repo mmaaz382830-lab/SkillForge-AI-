@@ -18,20 +18,19 @@ export function HeroSection() {
         <div className="grid gap-6">
           <Badge variant="yellow">Digital study desk</Badge>
           <h1>
-            Turn your notes into{" "}
+            Turn messy notes into a{" "}
             <span className="inline-block -rotate-1 bg-accent-yellow px-2">
-              roadmaps, quizzes,
-            </span>{" "}
-            and interview prep.
+              learning system.
+            </span>
           </h1>
           <p className="text-lg font-medium leading-8 sm:text-xl">
-            Upload your study material and {siteConfig.name} turns it into a
-            clear learning system: roadmap, flashcards, quizzes, mock
-            interviews, and note-grounded answers.
+            {siteConfig.name} turns PDFs, text notes, and pasted material into
+            roadmaps, flashcards, quizzes, mock interviews, and note-grounded
+            answers.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link className={primaryCta} href={publicRoutes.signup}>
-              Start Learning Free
+              Start Free
             </Link>
             <Link className={secondaryCta} href="#how-it-works">
               See How It Works

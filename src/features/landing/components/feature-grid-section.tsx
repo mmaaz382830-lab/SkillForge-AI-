@@ -51,6 +51,7 @@ export function FeatureGridSection() {
     <Section
       description="Each feature block maps to a learning job, not generic AI productivity."
       eyebrow="Feature cards"
+      id="features"
       title="Everything points back to study practice."
       variant="muted"
     >
