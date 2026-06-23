@@ -1,11 +1,13 @@
 import * as React from "react";
-import { Badge } from "@/components/ui";
+import { Badge, Button } from "@/components/ui";
+import { signOutAndRedirect } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils/cn";
 
 type DashboardTopbarProps = {
   title?: string;
   description?: string;
   actions?: React.ReactNode;
+  accountLabel?: string;
   className?: string;
 };
 
@@ -13,6 +15,7 @@ export function DashboardTopbar({
   title = "Dashboard",
   description,
   actions,
+  accountLabel = "Signed out",
   className,
 }: DashboardTopbarProps) {
   return (
@@ -32,7 +35,12 @@ export function DashboardTopbar({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {actions}
-          <Badge variant="green">Demo Learner</Badge>
+          <Badge variant="green">{accountLabel}</Badge>
+          <form action={signOutAndRedirect}>
+            <Button type="submit" variant="ghost" size="sm">
+              Sign out
+            </Button>
+          </form>
         </div>
       </div>
     </header>

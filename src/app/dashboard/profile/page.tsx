@@ -4,18 +4,60 @@ import { dashboardRoutes } from "@/config/routes";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { signOutAndRedirect } from "@/lib/auth/actions";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: `Profile — ${siteConfig.name}`,
   description: "Your SkillForge AI learning profile and account information.",
 };
 
-/**
- * /dashboard/profile — Profile visual shell.
- * Placeholder data only. No real user data, no profile update logic,
- * no logout, no Supabase.
- */
-export default function ProfilePage() {
+function formatPlan(plan?: string | null) {
+  if (!plan) {
+    return "Unknown";
+  }
+
+  return plan
+    .split("_")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "Not available";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+  }).format(new Date(value));
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
+export default async function ProfilePage() {
+  const [user, profile] = await Promise.all([
+    getCurrentUser(),
+    getCurrentProfile(),
+  ]);
+  const displayName =
+    profile?.full_name ||
+    user?.user_metadata.full_name ||
+    user?.user_metadata.name ||
+    "Signed-out learner";
+  const email = profile?.email || user?.email || "Sign in to view email";
+  const role = profile?.role ?? "user";
+  const plan = profile?.plan ?? "free";
+  const createdAt = profile?.created_at ?? user?.created_at ?? null;
+  const initials = getInitials(displayName) || "SF";
+
   return (
     <DashboardShell
       title="Profile"
@@ -30,25 +72,26 @@ export default function ProfilePage() {
             className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border-2 border-black bg-accent-yellow font-heading text-3xl font-black shadow-brutal-sm"
             aria-label="User avatar"
           >
-            DL
+            {initials}
           </div>
           {/* Info */}
           <div className="grid gap-3">
             <div>
               <h2 className="font-heading text-3xl font-black leading-tight">
-                Demo Learner
+                {displayName}
               </h2>
               <p className="mt-1 text-base font-semibold text-zinc-600">
-                demo@example.com
+                {email}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="neutral">User</Badge>
-              <Badge variant="yellow">Free plan</Badge>
-              <Badge variant="blue">Visual placeholder</Badge>
+              <Badge variant="neutral">{role}</Badge>
+              <Badge variant="yellow">{formatPlan(plan)} plan</Badge>
             </div>
             <p className="text-sm font-medium text-zinc-500">
-              Member since Day 2 — real profile loads in later phases.
+              {user
+                ? `Member since ${formatDate(createdAt)}.`
+                : "Sign in to load your saved profile."}
             </p>
           </div>
         </div>
@@ -61,11 +104,11 @@ export default function ProfilePage() {
         </h2>
         <div className="grid gap-3">
           {[
-            { label: "Display name", value: "Demo Learner" },
-            { label: "Email", value: "demo@example.com" },
-            { label: "Role", value: "user" },
-            { label: "Plan", value: "Free" },
-            { label: "Account created", value: "Day 2 — visual placeholder" },
+            { label: "Display name", value: displayName },
+            { label: "Email", value: email },
+            { label: "Role", value: role },
+            { label: "Plan", value: formatPlan(plan) },
+            { label: "Account created", value: formatDate(createdAt) },
           ].map((row) => (
             <div
               key={row.label}
@@ -80,14 +123,13 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* Visual logout placeholder */}
       <section
         className="brutal-card border-state-error p-5 sm:p-6"
         aria-label="Account actions"
       >
         <h2 className="mb-2 font-heading text-xl font-black">Account actions</h2>
         <p className="mb-4 text-sm font-medium text-zinc-600">
-          These controls are visual placeholders. Real account management connects in later phases.
+          Profile editing and password changes connect in later phases.
         </p>
         <div className="flex flex-wrap gap-3">
           <Button
@@ -104,14 +146,15 @@ export default function ProfilePage() {
           >
             Change password
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            aria-disabled="true"
-            className="text-state-error hover:bg-accent-pink"
-          >
-            Sign out
-          </Button>
+          <form action={signOutAndRedirect}>
+            <Button
+              type="submit"
+              variant="ghost"
+              className="text-state-error hover:bg-accent-pink"
+            >
+              Sign out
+            </Button>
+          </form>
         </div>
       </section>
     </DashboardShell>

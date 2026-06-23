@@ -3,6 +3,7 @@ import { siteConfig } from "@/config/site";
 import { dashboardRoutes } from "@/config/routes";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
+import { AuthMessage } from "@/features/auth/components/auth-message";
 import {
   DashboardStatCard,
   QuickActionCard,
@@ -14,6 +15,12 @@ import {
 export const metadata: Metadata = {
   title: `Dashboard — ${siteConfig.name}`,
   description: "Your SkillForge AI learning desk. View your materials, roadmaps, quizzes, and progress.",
+};
+
+type DashboardPageProps = {
+  searchParams: Promise<{
+    authError?: string | string[];
+  }>;
 };
 
 const STAT_CARDS = [
@@ -72,9 +79,13 @@ const QUICK_ACTIONS = [
 
 /**
  * /dashboard — Dashboard home visual shell.
- * Static data only. No auth check, no Supabase, no fetch.
  */
-export default function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const authError = Array.isArray(params.authError)
+    ? params.authError[0]
+    : params.authError;
+
   return (
     <DashboardShell
       title="Your learning desk."
@@ -86,6 +97,18 @@ export default function DashboardPage() {
         </Button>
       }
     >
+      {authError === "admin-required" ? (
+        <AuthMessage variant="error">
+          You do not have access to the admin area.
+        </AuthMessage>
+      ) : null}
+
+      {authError === "profile-unavailable" ? (
+        <AuthMessage variant="error">
+          Your account is signed in, but profile details could not be loaded yet.
+        </AuthMessage>
+      ) : null}
+
       {/* First-user empty-state banner */}
       <DashboardEmptyPanel
         emoji="📚"

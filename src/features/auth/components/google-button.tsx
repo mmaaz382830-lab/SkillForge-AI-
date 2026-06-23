@@ -1,16 +1,18 @@
-/**
- * GoogleButton — visual-only "Continue with Google" button.
- * No OAuth logic, no redirect, no Supabase. Visual shell only.
- * Uses type="button" and disabled to prevent any form submission.
- * Server component — no client logic.
- */
-export function GoogleButton() {
+type GoogleButtonProps = {
+  disabled?: boolean;
+  type?: "button" | "submit";
+};
+
+export function GoogleButton({
+  disabled = false,
+  type = "submit",
+}: GoogleButtonProps) {
   return (
     <button
-      type="button"
-      disabled
-      aria-disabled="true"
-      aria-label="Continue with Google — not yet available"
+      type={type}
+      disabled={disabled}
+      aria-disabled={disabled}
+      aria-label="Continue with Google"
       className="pressable inline-flex w-full items-center justify-center gap-3 rounded-md border-2 border-black bg-paper-base px-4 py-3 font-black text-ink-text transition disabled:translate-x-0 disabled:translate-y-0 disabled:shadow-none"
     >
       {/* Google G icon — inline SVG, no icon package */}
