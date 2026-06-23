@@ -5,18 +5,37 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: `Settings — ${siteConfig.name}`,
   description: "Manage your SkillForge AI account settings, plan, and preferences.",
 };
 
-/**
- * /dashboard/settings — Settings visual shell.
- * Static placeholders only. No real update logic, no billing, no Stripe,
- * no logout, no delete.
- */
-export default function SettingsPage() {
+function formatPlan(plan?: string | null) {
+  if (!plan) {
+    return "Unknown";
+  }
+
+  return plan
+    .split("_")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+export default async function SettingsPage() {
+  const [user, profile] = await Promise.all([
+    getCurrentUser(),
+    getCurrentProfile(),
+  ]);
+  const displayName =
+    profile?.full_name ||
+    user?.user_metadata.full_name ||
+    user?.user_metadata.name ||
+    "";
+  const plan = profile?.plan ?? "free";
+  const formattedPlan = formatPlan(plan);
+
   return (
     <DashboardShell
       title="Settings"
@@ -30,11 +49,13 @@ export default function SettingsPage() {
             <p className="text-xs font-black uppercase tracking-wider text-zinc-500">
               Current plan
             </p>
-            <h2 className="font-heading text-2xl font-black">Free plan</h2>
+            <h2 className="font-heading text-2xl font-black">
+              {formattedPlan} plan
+            </h2>
           </div>
           <div className="flex gap-2">
-            <Badge variant="yellow">Free</Badge>
-            <Badge variant="blue">Visual placeholder</Badge>
+            <Badge variant="yellow">{formattedPlan}</Badge>
+            <Badge variant="blue">{profile?.role ?? "user"}</Badge>
           </div>
         </div>
         <div className="mb-5 grid gap-4">
@@ -75,7 +96,7 @@ export default function SettingsPage() {
             <input
               type="text"
               readOnly
-              defaultValue="Demo Learner"
+              defaultValue={displayName || "Sign in to load your profile"}
               className="min-h-11 rounded-md border-2 border-black bg-paper-base px-3 py-2 text-base font-medium shadow-brutal-sm outline-none"
             />
           </label>
