@@ -21,7 +21,7 @@ const accentMap: Record<
 
 /**
  * QuickActionCard — color-coded action card linking to a dashboard feature.
- * Visual placeholder only — href is a real route link but no action is triggered.
+ * Route link card. Callers label future-phase actions explicitly when they are placeholders.
  */
 export function QuickActionCard({
   label,
@@ -52,3 +52,4 @@ export function QuickActionCard({
     </Link>
   );
 }
+
