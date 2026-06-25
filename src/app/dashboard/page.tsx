@@ -1,157 +1,218 @@
-import type { Metadata } from "next";
-import { siteConfig } from "@/config/site";
-import { dashboardRoutes } from "@/config/routes";
+import Link from "next/link";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { Button } from "@/components/ui/button";
-import { AuthMessage } from "@/features/auth/components/auth-message";
+import { ErrorState } from "@/components/states/error-state";
+import { Progress } from "@/components/ui/progress";
+import { dashboardRoutes } from "@/config/routes";
 import {
+  CurrentRoadmapCard,
+  DashboardEmptyPanel,
   DashboardStatCard,
   QuickActionCard,
   RecentActivityCard,
-  DashboardEmptyPanel,
   UsageCard,
 } from "@/features/dashboard/components";
+import { getDashboardProgress } from "@/lib/dashboard/queries";
 
-export const metadata: Metadata = {
-  title: `Dashboard — ${siteConfig.name}`,
-  description: "Your SkillForge AI learning desk. View your materials, roadmaps, quizzes, and progress.",
+export const metadata = {
+  title: "Dashboard | SkillForge AI",
+  description:
+    "Your SkillForge AI learning desk. View your materials, roadmaps, quizzes, and progress.",
+};
+
+type DashboardSearchParams = {
+  auth?: string;
+  reason?: string;
 };
 
 type DashboardPageProps = {
-  searchParams: Promise<{
-    authError?: string | string[];
-  }>;
+  searchParams?: Promise<DashboardSearchParams>;
 };
 
-const STAT_CARDS = [
-  { label: "Materials uploaded", value: 1, accent: "blue" as const },
-  { label: "Roadmaps created", value: 2, accent: "yellow" as const },
-  { label: "Flashcard decks", value: 1, accent: "green" as const },
-  { label: "Quizzes attempted", value: 3, accent: "pink" as const },
-  { label: "Tasks completed", value: 7, suffix: "%", accent: "green" as const },
-  { label: "AI generations left", value: 7, accent: "neutral" as const },
-];
+function AuthMessage({ auth, reason }: { auth?: string; reason?: string }) {
+  if (auth !== "required") {
+    return null;
+  }
 
-const QUICK_ACTIONS = [
-  {
-    label: "Upload material",
-    description: "Add a PDF, TXT, or paste your notes.",
-    href: dashboardRoutes.materials,
-    accent: "blue" as const,
-    emoji: "📄",
-  },
-  {
-    label: "Generate roadmap",
-    description: "Turn a topic into a structured learning plan.",
-    href: dashboardRoutes.roadmaps,
-    accent: "yellow" as const,
-    emoji: "🗺️",
-  },
-  {
-    label: "Start a quiz",
-    description: "Practice from your uploaded material.",
-    href: dashboardRoutes.quizzes,
-    accent: "pink" as const,
-    emoji: "✏️",
-  },
-  {
-    label: "Mock interview",
-    description: "Prepare technical explanations from your notes.",
-    href: dashboardRoutes.interview,
-    accent: "pink" as const,
-    emoji: "🎤",
-  },
-  {
-    label: "Chat with notes",
-    description: "Ask questions answered by your own material.",
-    href: dashboardRoutes.materials,
-    accent: "blue" as const,
-    emoji: "💬",
-  },
-  {
-    label: "Review flashcards",
-    description: "Revise topics with physical study cards.",
-    href: dashboardRoutes.flashcards,
-    accent: "green" as const,
-    emoji: "🃏",
-  },
-];
+  const message =
+    reason === "admin"
+      ? "Admin tools require an authorized admin account. You are signed in to the learner dashboard instead."
+      : "Sign in to access your SkillForge AI workspace.";
 
-/**
- * /dashboard — Dashboard home visual shell.
- */
+  return (
+    <div className="brutal-card border-state-warning bg-accent-yellow p-4 text-sm font-black shadow-brutal-sm">
+      {message}
+    </div>
+  );
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const params = await searchParams;
-  const authError = Array.isArray(params.authError)
-    ? params.authError[0]
-    : params.authError;
+  const [params, dashboardResult] = await Promise.all([
+    searchParams ?? Promise.resolve({} as DashboardSearchParams),
+    getDashboardProgress(),
+  ]);
 
   return (
     <DashboardShell
-      title="Your learning desk."
-      description="Pick up where you left off. Practice from your own notes."
       activePath={dashboardRoutes.dashboard}
       actions={
-        <Button type="button" variant="highlight" size="sm" aria-disabled="true">
-          Upload material
-        </Button>
+        <Link
+          className="inline-flex items-center justify-center rounded-md border-2 border-black bg-accent-yellow px-4 py-2 text-sm font-black text-ink-text shadow-brutal-sm transition-transform hover:-translate-y-0.5 hover:shadow-brutal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+          href={dashboardRoutes.roadmaps}
+        >
+          Manage roadmaps
+        </Link>
       }
+      description="Your protected SkillForge workspace now tracks Day 4 goals, roadmaps, and roadmap task progress. Later learning tools remain clearly marked for upcoming phases."
+      title="Dashboard"
     >
-      {authError === "admin-required" ? (
-        <AuthMessage variant="error">
-          You do not have access to the admin area.
-        </AuthMessage>
-      ) : null}
+      <AuthMessage auth={params.auth} reason={params.reason} />
 
-      {authError === "profile-unavailable" ? (
-        <AuthMessage variant="error">
-          Your account is signed in, but profile details could not be loaded yet.
-        </AuthMessage>
-      ) : null}
+      {!dashboardResult.ok ? (
+        <ErrorState
+          description="Refresh the page or sign in again before checking roadmap progress."
+          title="Could not load dashboard progress."
+        />
+      ) : (
+        <>
+          <section
+            aria-label="Day 4 progress summary"
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
+          >
+            <DashboardStatCard
+              accent="yellow"
+              label="Learning goals"
+              value={dashboardResult.data.learning_goal_count}
+            />
+            <DashboardStatCard
+              accent="yellow"
+              label="Roadmaps"
+              value={dashboardResult.data.roadmap_count}
+            />
+            <DashboardStatCard
+              accent="blue"
+              label="Roadmap tasks"
+              value={dashboardResult.data.roadmap_task_count}
+            />
+            <DashboardStatCard
+              accent="green"
+              label="Tasks completed"
+              value={dashboardResult.data.completed_task_count}
+            />
+            <DashboardStatCard
+              accent="green"
+              label="Overall roadmap progress"
+              suffix="%"
+              value={dashboardResult.data.overall_progress_percentage}
+            />
+          </section>
 
-      {/* First-user empty-state banner */}
-      <DashboardEmptyPanel
-        emoji="📚"
-        title="Start building your learning system."
-        description="Upload your first material to start building your learning system. Practice from your own notes with quizzes and interview prompts."
-        action={
-          <Button type="button" variant="primary" aria-disabled="true">
-            Upload your first material
-          </Button>
-        }
-      />
+          {dashboardResult.data.learning_goal_count === 0 &&
+          dashboardResult.data.roadmap_count === 0 &&
+          dashboardResult.data.roadmap_task_count === 0 ? (
+            <DashboardEmptyPanel
+              action={
+                <Link
+                  className="inline-flex items-center justify-center rounded-md border-2 border-black bg-accent-yellow px-4 py-2 text-sm font-black text-ink-text shadow-brutal-sm transition-transform hover:-translate-y-0.5 hover:shadow-brutal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+                  href={dashboardRoutes.roadmaps}
+                >
+                  Open roadmaps
+                </Link>
+              }
+              description="Create your first learning goal or roadmap to start tracking progress."
+              title="Start tracking progress."
+            />
+          ) : null}
 
-      {/* Stat grid */}
-      <section aria-label="Learning stats">
-        <h2 className="mb-4 font-heading text-xl font-black">
-          Your stats at a glance
-        </h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          {STAT_CARDS.map((s) => (
-            <DashboardStatCard key={s.label} {...s} />
-          ))}
-        </div>
-      </section>
+          <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+            <CurrentRoadmapCard roadmap={dashboardResult.data.current_roadmap} />
 
-      {/* Quick actions */}
-      <section aria-label="Quick actions">
-        <h2 className="mb-4 font-heading text-xl font-black">Quick actions</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {QUICK_ACTIONS.map((action) => (
-            <QuickActionCard key={action.label} {...action} />
-          ))}
-        </div>
-      </section>
+            <div className="brutal-card grid gap-4 bg-paper-base p-6">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-zinc-600">
+                  Overall roadmap progress
+                </p>
+                <h2 className="mt-2 font-heading text-2xl font-black leading-tight">
+                  {dashboardResult.data.overall_progress_percentage}% complete
+                </h2>
+              </div>
+              <Progress
+                description={`${dashboardResult.data.completed_task_count} of ${dashboardResult.data.roadmap_task_count} roadmap tasks completed across your roadmaps.`}
+                indicatorClassName="bg-accent-green"
+                label="All roadmap tasks"
+                value={dashboardResult.data.overall_progress_percentage}
+              />
+              <p className="text-sm font-semibold leading-6 text-zinc-600">
+                This uses completed tasks divided by total roadmap tasks. Roadmaps
+                with zero tasks contribute 0% until tasks are added.
+              </p>
+            </div>
+          </section>
+        </>
+      )}
 
-      {/* Bottom row: recent activity + usage */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <RecentActivityCard />
-        </div>
+      <section aria-labelledby="quick-actions-title" className="grid gap-4">
         <div>
-          <UsageCard />
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-zinc-600">
+            Quick actions
+          </p>
+          <h2
+            className="mt-2 font-heading text-2xl font-black leading-tight"
+            id="quick-actions-title"
+          >
+            Build your learning workspace
+          </h2>
         </div>
-      </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <QuickActionCard
+            accent="yellow"
+            description="Create goals, build roadmaps, and manage roadmap tasks."
+            emoji="+"
+            href={dashboardRoutes.roadmaps}
+            label="Create goal or roadmap"
+          />
+          <QuickActionCard
+            accent="green"
+            description="Open your roadmap list and continue task tracking."
+            emoji=">"
+            href={dashboardRoutes.roadmaps}
+            label="Manage roadmaps"
+          />
+          <QuickActionCard
+            accent="blue"
+            description="Coming in the next phases. This card does not show live material stats yet."
+            emoji="M"
+            href={dashboardRoutes.materials}
+            label="Materials later"
+          />
+          <QuickActionCard
+            accent="pink"
+            description="Coming in a later phase after source material flows exist."
+            emoji="F"
+            href={dashboardRoutes.flashcards}
+            label="Flashcards later"
+          />
+          <QuickActionCard
+            accent="yellow"
+            description="Coming later. Quiz attempts are not counted on this dashboard yet."
+            emoji="Q"
+            href={dashboardRoutes.quizzes}
+            label="Quizzes later"
+          />
+          <QuickActionCard
+            accent="blue"
+            description="Coming later. Interview practice remains a protected placeholder."
+            emoji="I"
+            href={dashboardRoutes.interview}
+            label="Interview later"
+          />
+        </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+        <RecentActivityCard />
+        <UsageCard />
+      </section>
     </DashboardShell>
   );
 }
+

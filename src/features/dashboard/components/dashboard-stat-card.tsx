@@ -19,7 +19,7 @@ const accentMap: Record<NonNullable<DashboardStatCardProps["accent"]>, string> =
 
 /**
  * DashboardStatCard — compact metric card used in the dashboard home grid.
- * Static data only — no real data fetching.
+ * Receives already-loaded values from dashboard server components.
  */
 export function DashboardStatCard({
   label,
@@ -49,3 +49,4 @@ export function DashboardStatCard({
     </div>
   );
 }
+
