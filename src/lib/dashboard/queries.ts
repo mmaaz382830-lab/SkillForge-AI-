@@ -1,6 +1,6 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { calculateRoadmapProgress } from "@/lib/roadmaps/progress";
 import { getAuthenticatedUserId } from "@/lib/roadmaps/queries";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   DashboardProgressSummary,
   DashboardRoadmapSummary,
@@ -50,26 +50,37 @@ export async function getDashboardProgress(): Promise<
 
   const supabase = await createSupabaseServerClient();
 
-  const [goalsResult, roadmapsResult, tasksResult] = await Promise.all([
-    supabase
-      .from("learning_goals")
-      .select("id, title")
-      .eq("user_id", user.data)
-      .returns<DashboardGoalRow[]>(),
-    supabase
-      .from("roadmaps")
-      .select(ROADMAP_SELECT)
-      .eq("user_id", user.data)
-      .order("updated_at", { ascending: false })
-      .returns<Roadmap[]>(),
-    supabase
-      .from("roadmap_tasks")
-      .select("id, roadmap_id, status")
-      .eq("user_id", user.data)
-      .returns<DashboardTaskRow[]>(),
-  ]);
+  const [goalsResult, roadmapsResult, tasksResult, materialCountResult] =
+    await Promise.all([
+      supabase
+        .from("learning_goals")
+        .select("id, title")
+        .eq("user_id", user.data)
+        .returns<DashboardGoalRow[]>(),
+      supabase
+        .from("roadmaps")
+        .select(ROADMAP_SELECT)
+        .eq("user_id", user.data)
+        .order("updated_at", { ascending: false })
+        .returns<Roadmap[]>(),
+      supabase
+        .from("roadmap_tasks")
+        .select("id, roadmap_id, status")
+        .eq("user_id", user.data)
+        .returns<DashboardTaskRow[]>(),
+      supabase
+        .from("materials")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.data)
+        .is("deleted_at", null),
+    ]);
 
-  if (goalsResult.error || roadmapsResult.error || tasksResult.error) {
+  if (
+    goalsResult.error ||
+    roadmapsResult.error ||
+    tasksResult.error ||
+    materialCountResult.error
+  ) {
     return {
       ok: false,
       error: "Could not load dashboard progress.",
@@ -97,6 +108,7 @@ export async function getDashboardProgress(): Promise<
     ok: true,
     data: {
       learning_goal_count: goals.length,
+      material_count: materialCountResult.count ?? 0,
       roadmap_count: roadmaps.length,
       roadmap_task_count: overallProgress.total,
       completed_task_count: overallProgress.completed,
@@ -105,4 +117,3 @@ export async function getDashboardProgress(): Promise<
     },
   };
 }
-

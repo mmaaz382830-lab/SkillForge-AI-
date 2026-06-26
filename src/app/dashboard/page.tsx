@@ -12,6 +12,7 @@ import {
   UsageCard,
 } from "@/features/dashboard/components";
 import { getDashboardProgress } from "@/lib/dashboard/queries";
+import { getRecentMaterials } from "@/lib/materials/queries";
 
 export const metadata = {
   title: "Dashboard | SkillForge AI",
@@ -46,9 +47,10 @@ function AuthMessage({ auth, reason }: { auth?: string; reason?: string }) {
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const [params, dashboardResult] = await Promise.all([
+  const [params, dashboardResult, recentMaterialsResult] = await Promise.all([
     searchParams ?? Promise.resolve({} as DashboardSearchParams),
     getDashboardProgress(),
+    getRecentMaterials(3),
   ]);
 
   return (
@@ -57,31 +59,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       actions={
         <Link
           className="inline-flex items-center justify-center rounded-md border-2 border-black bg-accent-yellow px-4 py-2 text-sm font-black text-ink-text shadow-brutal-sm transition-transform hover:-translate-y-0.5 hover:shadow-brutal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
-          href={dashboardRoutes.roadmaps}
+          href={dashboardRoutes.materials}
         >
-          Manage roadmaps
+          Upload material
         </Link>
       }
-      description="Your protected SkillForge workspace now tracks Day 4 goals, roadmaps, and roadmap task progress. Later learning tools remain clearly marked for upcoming phases."
+      description="Your protected SkillForge workspace tracks roadmaps and private materials. AI generation and RAG actions remain clearly marked for later phases."
       title="Dashboard"
     >
       <AuthMessage auth={params.auth} reason={params.reason} />
 
       {!dashboardResult.ok ? (
         <ErrorState
-          description="Refresh the page or sign in again before checking roadmap progress."
+          description="Refresh the page or sign in again before checking roadmap and material progress."
           title="Could not load dashboard progress."
         />
       ) : (
         <>
           <section
-            aria-label="Day 4 progress summary"
-            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
+            aria-label="Dashboard progress summary"
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"
           >
             <DashboardStatCard
               accent="yellow"
               label="Learning goals"
               value={dashboardResult.data.learning_goal_count}
+            />
+            <DashboardStatCard
+              accent="blue"
+              label="Materials uploaded"
+              value={dashboardResult.data.material_count}
             />
             <DashboardStatCard
               accent="yellow"
@@ -107,19 +114,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </section>
 
           {dashboardResult.data.learning_goal_count === 0 &&
+          dashboardResult.data.material_count === 0 &&
           dashboardResult.data.roadmap_count === 0 &&
           dashboardResult.data.roadmap_task_count === 0 ? (
             <DashboardEmptyPanel
               action={
                 <Link
                   className="inline-flex items-center justify-center rounded-md border-2 border-black bg-accent-yellow px-4 py-2 text-sm font-black text-ink-text shadow-brutal-sm transition-transform hover:-translate-y-0.5 hover:shadow-brutal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
-                  href={dashboardRoutes.roadmaps}
+                  href={dashboardRoutes.materials}
                 >
-                  Open roadmaps
+                  Upload material
                 </Link>
               }
-              description="Create your first learning goal or roadmap to start tracking progress."
-              title="Start tracking progress."
+              description="Upload your first material or create a learning goal to start building your workspace."
+              title="Start your learning workspace."
             />
           ) : null}
 
@@ -164,6 +172,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <QuickActionCard
+            accent="blue"
+            description="Upload PDF/TXT files or paste notes for future study tools."
+            emoji="M"
+            href={dashboardRoutes.materials}
+            label="Upload material"
+          />
+          <QuickActionCard
             accent="yellow"
             description="Create goals, build roadmaps, and manage roadmap tasks."
             emoji="+"
@@ -178,29 +193,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             label="Manage roadmaps"
           />
           <QuickActionCard
-            accent="blue"
-            description="Coming in the next phases. This card does not show live material stats yet."
-            emoji="M"
-            href={dashboardRoutes.materials}
-            label="Materials later"
-          />
-          <QuickActionCard
             accent="pink"
-            description="Coming in a later phase after source material flows exist."
+            description="Coming in Day 6 after source material flows exist."
             emoji="F"
             href={dashboardRoutes.flashcards}
             label="Flashcards later"
           />
           <QuickActionCard
             accent="yellow"
-            description="Coming later. Quiz attempts are not counted on this dashboard yet."
+            description="Coming in Day 6. Quiz attempts are not counted on this dashboard yet."
             emoji="Q"
             href={dashboardRoutes.quizzes}
             label="Quizzes later"
           />
           <QuickActionCard
             accent="blue"
-            description="Coming later. Interview practice remains a protected placeholder."
+            description="Coming in Day 8. Interview practice remains a protected placeholder."
             emoji="I"
             href={dashboardRoutes.interview}
             label="Interview later"
@@ -209,10 +217,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <RecentActivityCard />
+        <RecentActivityCard
+          loadError={!recentMaterialsResult.ok}
+          materials={recentMaterialsResult.ok ? recentMaterialsResult.data : []}
+        />
         <UsageCard />
       </section>
     </DashboardShell>
   );
 }
-

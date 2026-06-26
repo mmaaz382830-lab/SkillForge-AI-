@@ -51,7 +51,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const isDisabled = disabled || loading || ariaDisabled;
 
     return (
+      // Some browser extensions inject attributes like fdprocessedid before hydration.
       <button
+        suppressHydrationWarning
         className={cn(
           "inline-flex items-center justify-center gap-2 rounded-md border-2 border-black font-black leading-none transition disabled:translate-x-0 disabled:translate-y-0 disabled:shadow-none",
           variant !== "ghost" && "pressable",
