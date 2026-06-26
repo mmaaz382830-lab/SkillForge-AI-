@@ -11,6 +11,7 @@ export const publicRoutes = {
 export const dashboardRoutes = {
   dashboard: "/dashboard",
   materials: "/dashboard/materials",
+  materialDetail: (id: string) => `/dashboard/materials/${id}`,
   roadmaps: "/dashboard/roadmaps",
   flashcards: "/dashboard/flashcards",
   quizzes: "/dashboard/quizzes",

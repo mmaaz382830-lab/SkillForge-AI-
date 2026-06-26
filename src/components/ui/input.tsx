@@ -15,7 +15,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <label className="grid gap-2 font-bold">
         {label ? <span>{label}</span> : null}
+        {/* browser extensions may inject fdprocessedid before hydration. */}
         <input
+          suppressHydrationWarning
           aria-describedby={cn(helperId, errorId) || undefined}
           aria-invalid={error ? true : undefined}
           className={cn(

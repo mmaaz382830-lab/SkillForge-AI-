@@ -12,6 +12,7 @@ export type DashboardRoadmapSummary = {
 
 export type DashboardProgressSummary = {
   learning_goal_count: number;
+  material_count: number;
   roadmap_count: number;
   roadmap_task_count: number;
   completed_task_count: number;

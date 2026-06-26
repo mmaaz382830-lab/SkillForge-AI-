@@ -1,85 +1,84 @@
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
-type ActivityItem = {
-  id: string;
-  label: string;
-  time: string;
-  badge: "blue" | "yellow" | "green" | "pink" | "neutral";
-  badgeText: string;
+import { Badge } from "@/components/ui/badge";
+import { dashboardRoutes } from "@/config/routes";
+import {
+  formatMaterialDate,
+  formatMaterialStatus,
+  formatMaterialType,
+} from "@/lib/materials/format";
+import type { MaterialListItem, MaterialProcessingStatus } from "@/types/materials";
+
+type RecentActivityCardProps = {
+  loadError?: boolean;
+  materials: MaterialListItem[];
 };
 
-const STATIC_ACTIVITIES: ActivityItem[] = [
-  {
-    id: "1",
-    label: "Uploaded \"JavaScript Notes.pdf\"",
-    time: "Just now",
-    badge: "blue",
-    badgeText: "Material",
-  },
-  {
-    id: "2",
-    label: "Generated roadmap \"Async/Await Mastery\"",
-    time: "2 min ago",
-    badge: "yellow",
-    badgeText: "Roadmap",
-  },
-  {
-    id: "3",
-    label: "Completed quiz — 8/10 correct",
-    time: "15 min ago",
-    badge: "pink",
-    badgeText: "Quiz",
-  },
-  {
-    id: "4",
-    label: "Created 20 flashcards from notes",
-    time: "1 hr ago",
-    badge: "green",
-    badgeText: "Flashcards",
-  },
-  {
-    id: "5",
-    label: "Mock interview — Promises & closures",
-    time: "Yesterday",
-    badge: "pink",
-    badgeText: "Interview",
-  },
-];
+const statusBadge: Record<
+  MaterialProcessingStatus,
+  "neutral" | "blue" | "success" | "error"
+> = {
+  pending: "neutral",
+  processing: "blue",
+  completed: "success",
+  failed: "error",
+};
 
-/**
- * RecentActivityCard — visual-only static recent activity list.
- * No real data. Designed dashboard preview only.
- */
-export function RecentActivityCard() {
+export function RecentActivityCard({
+  loadError = false,
+  materials,
+}: RecentActivityCardProps) {
   return (
-    <section className="brutal-card p-5 sm:p-6" aria-label="Recent activity">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="font-heading text-xl font-black">Recent activity</h2>
-        <span className="rounded-md border-2 border-black bg-accent-blue px-2 py-1 text-xs font-black uppercase shadow-brutal-sm">
-          Designed preview
-        </span>
+    <section className="brutal-card p-5 sm:p-6" aria-label="Recent materials">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-zinc-600">
+            Source library
+          </p>
+          <h2 className="mt-2 font-heading text-xl font-black">
+            Recent materials
+          </h2>
+        </div>
+        <Link
+          className="inline-flex w-fit min-h-9 items-center rounded-md border-2 border-black bg-accent-blue px-3 py-2 text-xs font-black uppercase shadow-brutal-sm transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none"
+          href={dashboardRoutes.materials}
+        >
+          View all
+        </Link>
       </div>
-      <ol className="grid gap-3" role="list">
-        {STATIC_ACTIVITIES.map((item) => (
-          <li
-            key={item.id}
-            className="flex items-start justify-between gap-3 rounded-md border-2 border-black bg-paper-muted px-3 py-2"
-          >
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-sm font-semibold leading-tight">
-                {item.label}
-              </span>
-              <span className="text-xs font-medium text-zinc-500">
-                {item.time}
-              </span>
-            </div>
-            <Badge variant={item.badge}>{item.badgeText}</Badge>
-          </li>
-        ))}
-      </ol>
-      <p className="mt-4 text-xs font-semibold text-zinc-400">
-        Designed dashboard preview — real data connects in later phases.
-      </p>
+
+      {loadError ? (
+        <div className="rounded-md border-2 border-black bg-accent-pink px-3 py-3 text-sm font-black leading-6">
+          Could not load recent materials. Open Materials to refresh your library.
+        </div>
+      ) : materials.length === 0 ? (
+        <div className="rounded-md border-2 border-black bg-paper-muted px-3 py-3 text-sm font-semibold leading-6">
+          Upload your first PDF, TXT, or pasted note to see recent materials here.
+        </div>
+      ) : (
+        <ol className="grid gap-3" role="list">
+          {materials.map((material) => (
+            <li key={material.id}>
+              <Link
+                className="flex items-start justify-between gap-3 rounded-md border-2 border-black bg-paper-muted px-3 py-2 no-underline transition hover:-translate-y-0.5 hover:bg-accent-blue hover:shadow-brutal-sm"
+                href={dashboardRoutes.materialDetail(material.id)}
+              >
+                <div className="min-w-0">
+                  <span className="block truncate text-sm font-black leading-tight">
+                    {material.title}
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold text-zinc-600">
+                    {formatMaterialType(material.type)} - Added {formatMaterialDate(material.created_at)}
+                  </span>
+                </div>
+                <Badge variant={statusBadge[material.processing_status]}>
+                  {formatMaterialStatus(material.processing_status)}
+                </Badge>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }

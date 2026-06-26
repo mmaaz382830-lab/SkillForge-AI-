@@ -1,124 +1,63 @@
 import type { Metadata } from "next";
-import { siteConfig } from "@/config/site";
-import { dashboardRoutes } from "@/config/routes";
+
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/states/empty-state";
+import { ErrorState } from "@/components/states/error-state";
+import { dashboardRoutes } from "@/config/routes";
+import { siteConfig } from "@/config/site";
 import { MaterialCard } from "@/features/materials/components/material-card";
+import { MaterialsUploadSection } from "@/features/materials/components/materials-upload-section";
+import { listMaterials } from "@/lib/materials/queries";
 
 export const metadata: Metadata = {
   title: `Materials — ${siteConfig.name}`,
-  description: "Upload and manage your learning materials. PDFs, TXT files, and pasted text.",
+  description:
+    "Upload and manage your learning materials. PDFs, TXT files, and pasted text.",
 };
 
-const STATIC_MATERIALS = [
-  {
-    title: "JavaScript Notes.pdf",
-    fileType: "PDF",
-    uploadDate: "Today",
-    status: "completed" as const,
-    chunkCount: 42,
-  },
-  {
-    title: "React Hooks — Personal Notes",
-    fileType: "Text",
-    uploadDate: "Yesterday",
-    status: "processing" as const,
-  },
-  {
-    title: "Async Await Patterns.txt",
-    fileType: "TXT",
-    uploadDate: "3 days ago",
-    status: "pending" as const,
-  },
-  {
-    title: "Node.js Module System.pdf",
-    fileType: "PDF",
-    uploadDate: "Last week",
-    status: "failed" as const,
-  },
-];
+export default async function MaterialsPage() {
+  const materialsResult = await listMaterials();
 
-/**
- * /dashboard/materials — Materials visual shell.
- * Static data only. No real upload, no Supabase storage, no file processing.
- */
-export default function MaterialsPage() {
   return (
     <DashboardShell
-      title="Materials"
-      description="Your uploaded notes, PDFs, and text. Each material becomes a source for AI study tools."
       activePath={dashboardRoutes.materials}
-      actions={
-        <Button type="button" variant="primary" size="sm" aria-disabled="true">
-          Upload material
-        </Button>
-      }
+      description="Upload PDF/TXT files or paste notes. Each processed material becomes a private source for future study tools."
+      title="Materials"
     >
-      {/* Upload dropzone visual */}
-      <section
-        className="rounded-xl border-4 border-dashed border-black bg-paper-base p-8 text-center shadow-brutal-sm"
-        aria-label="Upload area"
-      >
-        <div
-          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-md border-2 border-black bg-accent-blue text-2xl shadow-brutal-sm"
-          aria-hidden="true"
-        >
-          📄
-        </div>
-        <h2 className="font-heading text-2xl font-black">
-          Drop your PDF or TXT here, or browse files.
-        </h2>
-        <p className="mt-2 text-sm font-semibold text-zinc-500">
-          PDF and TXT supported for MVP. Scanned PDFs may not extract correctly
-          yet. Max 10 MB.
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          {["PDF", "TXT", "Pasted Text"].map((type) => (
-            <span
-              key={type}
-              className="rounded-pill border-2 border-black bg-accent-blue px-3 py-1 text-xs font-black shadow-brutal-sm"
-            >
-              {type}
-            </span>
-          ))}
-        </div>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <Button type="button" variant="primary" aria-disabled="true">
-            Browse files
-          </Button>
-          <Button type="button" variant="secondary" aria-disabled="true">
-            Paste text
-          </Button>
-        </div>
-        <p className="mt-4 text-xs font-semibold text-zinc-400">
-          Upload your first material to start building your learning system.
-        </p>
-      </section>
+      <MaterialsUploadSection />
 
-      {/* Material list */}
-      <section aria-label="Your materials">
-        <h2 className="mb-4 font-heading text-xl font-black">
-          Your materials
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {STATIC_MATERIALS.map((mat) => (
-            <MaterialCard key={mat.title} {...mat} />
-          ))}
+      <section aria-labelledby="materials-list-heading" className="grid gap-4">
+        <div>
+          <p className="text-xs font-black uppercase text-zinc-500">
+            Private source library
+          </p>
+          <h2
+            className="mt-1 font-heading text-2xl font-black"
+            id="materials-list-heading"
+          >
+            Your materials
+          </h2>
         </div>
-      </section>
 
-      {/* Empty state example */}
-      <EmptyState
-        title="No materials yet."
-        description="Upload your first note, PDF, or paste text to start building your AI learning system."
-        accent="blue"
-        action={
-          <Button type="button" variant="primary" aria-disabled="true">
-            Upload first material
-          </Button>
-        }
-      />
+        {!materialsResult.ok ? (
+          <ErrorState
+            description="Refresh the page or sign in again before uploading more materials."
+            title="Could not load materials."
+          />
+        ) : materialsResult.data.length === 0 ? (
+          <EmptyState
+            accent="blue"
+            description="Upload a PDF/TXT or paste notes to start building your study system."
+            title="No materials yet"
+          />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {materialsResult.data.map((material) => (
+              <MaterialCard key={material.id} material={material} />
+            ))}
+          </div>
+        )}
+      </section>
     </DashboardShell>
   );
 }
