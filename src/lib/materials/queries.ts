@@ -3,6 +3,7 @@ import type {
   MaterialActionResult,
   MaterialDetail,
   MaterialListItem,
+  MaterialRoadmapOption,
 } from "@/types/materials";
 
 export const MATERIAL_LIST_SELECT =
@@ -80,6 +81,43 @@ export async function getMaterialDetail(
   }
 
   return getOwnedMaterialDetail(id, user.data);
+}
+
+export async function listCompletedMaterialRoadmapOptions(): Promise<
+  MaterialActionResult<MaterialRoadmapOption[]>
+> {
+  const user = await getAuthenticatedMaterialUserId();
+
+  if (!user.ok) {
+    return user;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("materials")
+    .select("id,title,extracted_text")
+    .eq("user_id", user.data)
+    .eq("processing_status", "completed")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .returns<Array<MaterialRoadmapOption & { extracted_text: string | null }>>();
+
+  if (error) {
+    return {
+      ok: false,
+      error: "Could not load materials.",
+    };
+  }
+
+  return {
+    ok: true,
+    data: (data ?? [])
+      .filter((material) => material.extracted_text?.trim())
+      .map((material) => ({
+        id: material.id,
+        title: material.title,
+      })),
+  };
 }
 
 export async function getRecentMaterials(

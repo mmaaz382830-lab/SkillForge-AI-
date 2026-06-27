@@ -180,38 +180,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           />
           <QuickActionCard
             accent="yellow"
-            description="Create goals, build roadmaps, and manage roadmap tasks."
+            description="Generate a structured roadmap from your notes."
             emoji="+"
             href={dashboardRoutes.roadmaps}
-            label="Create goal or roadmap"
+            label="AI Roadmaps"
           />
           <QuickActionCard
             accent="green"
-            description="Open your roadmap list and continue task tracking."
-            emoji=">"
-            href={dashboardRoutes.roadmaps}
-            label="Manage roadmaps"
+            description="Turn processed materials into flashcards."
+            emoji="F"
+            href={dashboardRoutes.flashcards}
+            label="Flashcards"
           />
           <QuickActionCard
             accent="pink"
-            description="Coming in Day 6 after source material flows exist."
-            emoji="F"
-            href={dashboardRoutes.flashcards}
-            label="Flashcards later"
-          />
-          <QuickActionCard
-            accent="yellow"
-            description="Coming in Day 6. Quiz attempts are not counted on this dashboard yet."
+            description="Create multiple-choice quizzes from your notes."
             emoji="Q"
             href={dashboardRoutes.quizzes}
-            label="Quizzes later"
+            label="Quizzes"
           />
           <QuickActionCard
             accent="blue"
-            description="Coming in Day 8. Interview practice remains a protected placeholder."
+            description="Practice with AI-generated interview questions."
             emoji="I"
             href={dashboardRoutes.interview}
-            label="Interview later"
+            label="Interview Questions"
           />
         </div>
       </section>

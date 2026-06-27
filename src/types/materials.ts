@@ -29,6 +29,8 @@ export type MaterialListItem = Omit<
   "user_id" | "extracted_text" | "storage_path"
 >;
 
+export type MaterialRoadmapOption = Pick<MaterialRow, "id" | "title">;
+
 export type MaterialDetail = Omit<MaterialRow, "user_id">;
 
 export type CreatePastedTextMaterialInput = {

@@ -11,7 +11,7 @@ import type {
 import { calculateRoadmapProgress } from "./progress";
 
 const ROADMAP_SELECT =
-  "id,user_id,goal_id,title,description,difficulty,estimated_duration,ai_generated,created_at,updated_at";
+  "id,user_id,goal_id,material_id,title,description,difficulty,estimated_duration,ai_generated,created_at,updated_at";
 const TASK_SELECT =
   "id,roadmap_id,user_id,title,description,status,order_index,estimated_time,completed_at,created_at,updated_at";
 const GOAL_SELECT =
@@ -160,6 +160,7 @@ export async function listRoadmapViews(): Promise<
       return {
         id: roadmap.id,
         goal_id: roadmap.goal_id,
+        material_id: roadmap.material_id,
         goal_title: roadmap.goal_id
           ? (goalTitleById.get(roadmap.goal_id) ?? null)
           : null,
@@ -260,6 +261,7 @@ export async function getRoadmapById(
     data: {
       id: roadmap.id,
       goal_id: roadmap.goal_id,
+      material_id: roadmap.material_id,
       goal_title: goalResult.data?.title ?? null,
       title: roadmap.title,
       description: roadmap.description,

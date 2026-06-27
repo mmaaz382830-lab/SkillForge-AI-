@@ -1,4 +1,5 @@
 import type {
+  AiRoadmapGenerationInput,
   LearningGoalInput,
   RoadmapInput,
   RoadmapTaskInput,
@@ -279,5 +280,60 @@ export function validateRoadmapTaskStatus(
   return {
     ok: true,
     data: status,
+  };
+}
+
+export function validateAiRoadmapGenerationInput(
+  input: AiRoadmapGenerationInput,
+): ValidationResult<Required<AiRoadmapGenerationInput>> {
+  const materialId = validateOptionalUuid(input.material_id);
+
+  if (!materialId.ok) {
+    return materialId;
+  }
+
+  const goalId = validateOptionalUuid(input.goal_id);
+
+  if (!goalId.ok) {
+    return goalId;
+  }
+
+  const topic = normalizeOptionalText(input.topic, 240);
+
+  if (!materialId.data && !goalId.data && !topic) {
+    return {
+      ok: false,
+      error: "Choose a material, goal, or topic first.",
+    };
+  }
+
+  const difficulty = validateDifficulty(input.difficulty);
+
+  if (!difficulty.ok) {
+    return difficulty;
+  }
+
+  const taskCount = input.task_count ?? 7;
+
+  if (!Number.isInteger(taskCount) || taskCount < 5 || taskCount > 10) {
+    return {
+      ok: false,
+      error: "Task count must be between 5 and 10.",
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      material_id: materialId.data,
+      goal_id: goalId.data,
+      topic,
+      difficulty: difficulty.data,
+      estimated_duration: normalizeOptionalText(
+        input.estimated_duration,
+        MAX_DURATION_LENGTH,
+      ),
+      task_count: taskCount,
+    },
   };
 }

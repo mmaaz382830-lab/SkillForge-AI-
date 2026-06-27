@@ -6,6 +6,7 @@ import { dashboardRoutes } from "@/config/routes";
 import { siteConfig } from "@/config/site";
 import { LearningGoalsSection } from "@/features/roadmaps/components/learning-goals-section";
 import { RoadmapsSection } from "@/features/roadmaps/components/roadmaps-section";
+import { listCompletedMaterialRoadmapOptions } from "@/lib/materials/queries";
 import { listLearningGoals, listRoadmapViews } from "@/lib/roadmaps/queries";
 import type {
   LearningGoal,
@@ -39,9 +40,10 @@ function toGoalOption(goal: LearningGoal): LearningGoalOption {
 }
 
 export default async function RoadmapsPage() {
-  const [goalsResult, roadmapsResult] = await Promise.all([
+  const [goalsResult, roadmapsResult, materialsResult] = await Promise.all([
     listLearningGoals(),
     listRoadmapViews(),
+    listCompletedMaterialRoadmapOptions(),
   ]);
   const goalOptions = goalsResult.ok ? goalsResult.data.map(toGoalOption) : [];
 
@@ -66,7 +68,11 @@ export default async function RoadmapsPage() {
           title="Could not load roadmaps."
         />
       ) : (
-        <RoadmapsSection goals={goalOptions} roadmaps={roadmapsResult.data} />
+        <RoadmapsSection
+          goals={goalOptions}
+          materials={materialsResult.ok ? materialsResult.data : []}
+          roadmaps={roadmapsResult.data}
+        />
       )}
     </DashboardShell>
   );
