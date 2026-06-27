@@ -37,10 +37,15 @@ const fileTypeColors: Record<string, string> = {
   "Pasted text": "bg-accent-yellow",
 };
 
+function buildChatHref(materialId: string): string {
+  return `${dashboardRoutes.chat}?materialId=${encodeURIComponent(materialId)}`;
+}
+
 export function MaterialCard({ material }: MaterialCardProps) {
   const fileType = formatMaterialType(material.type);
   const badge = statusBadge[material.processing_status];
   const fileSize = formatFileSize(material.file_size_bytes);
+  const chatReady = material.processing_status === "completed";
 
   return (
     <article className="brutal-card p-4 sm:p-5">
@@ -96,9 +101,18 @@ export function MaterialCard({ material }: MaterialCardProps) {
         >
           Preview
         </Link>
-        <Button aria-disabled="true" size="sm" type="button" variant="secondary">
-          Chat coming Day 7
-        </Button>
+        {chatReady ? (
+          <Link
+            className="inline-flex min-h-10 items-center justify-center rounded-md border-2 border-black bg-accent-blue px-3 py-2 text-sm font-black leading-none shadow-brutal-sm transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+            href={buildChatHref(material.id)}
+          >
+            Chat with this material
+          </Link>
+        ) : (
+          <Button aria-disabled="true" size="sm" type="button" variant="secondary">
+            Chat after processing
+          </Button>
+        )}
         <Button aria-disabled="true" size="sm" type="button" variant="highlight">
           Generate Day 6
         </Button>

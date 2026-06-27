@@ -7,10 +7,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AiUsageLimitError } from "./errors";
 
 export const AI_FEATURE_TYPES = [
+  "chat",
   "roadmap",
   "flashcards",
   "quiz",
   "interview",
+  "embeddings",
 ] as const;
 
 export type AiFeatureType = (typeof AI_FEATURE_TYPES)[number];
@@ -54,22 +56,28 @@ type UsageLogResult =
 
 export const AI_USAGE_LIMITS = {
   free: {
+    chat: 25,
     roadmap: 5,
     flashcards: 10,
     quiz: 10,
     interview: 5,
+    embeddings: 10,
   },
   pro: {
+    chat: 500,
     roadmap: 100,
     flashcards: 200,
     quiz: 200,
     interview: 100,
+    embeddings: 100,
   },
   demo_admin: {
+    chat: 1000,
     roadmap: 1000,
     flashcards: 1000,
     quiz: 1000,
     interview: 1000,
+    embeddings: 1000,
   },
 } as const satisfies Record<ProfilePlan, Record<AiFeatureType, number>>;
 
@@ -81,6 +89,8 @@ const SAFE_USAGE_METADATA_KEYS = new Set([
   "retry_count",
   "duration_ms",
   "error_code",
+  "chunk_count",
+  "embedding_dimension",
 ]);
 
 const BLOCKED_ERROR_CODE = "USAGE_LIMIT_REACHED";

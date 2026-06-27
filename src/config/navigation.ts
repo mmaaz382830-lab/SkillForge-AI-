@@ -9,6 +9,7 @@ export const publicNavigation = [
 export const dashboardNavigation = [
   { label: "Dashboard", href: dashboardRoutes.dashboard },
   { label: "Materials", href: dashboardRoutes.materials },
+  { label: "Chat", href: dashboardRoutes.chat },
   { label: "Roadmaps", href: dashboardRoutes.roadmaps },
   { label: "Flashcards", href: dashboardRoutes.flashcards },
   { label: "Quizzes", href: dashboardRoutes.quizzes },
@@ -21,3 +22,4 @@ export const dashboardNavigation = [
 export const adminNavigation = [
   { label: "Admin", href: adminRoutes.admin },
 ] as const;
+

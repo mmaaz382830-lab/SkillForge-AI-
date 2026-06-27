@@ -117,7 +117,12 @@ function MaterialMetadataCard({ material }: { material: MaterialDetail }) {
   );
 }
 
-function FutureActions() {
+function buildChatHref(materialId: string): string {
+  return `${dashboardRoutes.chat}?materialId=${encodeURIComponent(materialId)}`;
+}
+function FutureActions({ material }: { material: MaterialDetail }) {
+  const chatReady = material.processing_status === "completed";
+
   return (
     <section aria-labelledby="future-material-actions-heading" className="brutal-card bg-accent-blue p-5 sm:p-6">
       <p className="text-xs font-black uppercase tracking-[0.14em] text-zinc-700">
@@ -127,12 +132,21 @@ function FutureActions() {
         className="mt-2 font-heading text-2xl font-black leading-tight"
         id="future-material-actions-heading"
       >
-        Coming in the next phases
+        Turn this source into study work
       </h2>
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button aria-disabled="true" size="sm" type="button" variant="secondary">
-          Chat with notes - Day 7
-        </Button>
+        {chatReady ? (
+          <Link
+            className="inline-flex min-h-10 items-center justify-center rounded-md border-2 border-black bg-paper-base px-3 py-2 text-sm font-black leading-none shadow-brutal-sm transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+            href={buildChatHref(material.id)}
+          >
+            Chat with this material
+          </Link>
+        ) : (
+          <Button aria-disabled="true" size="sm" type="button" variant="secondary">
+            Chat after processing
+          </Button>
+        )}
         <Button aria-disabled="true" size="sm" type="button" variant="highlight">
           Generate study assets - Day 6
         </Button>
@@ -177,7 +191,7 @@ export default async function MaterialDetailPage({
         <div className="grid gap-5">
           <MaterialMetadataCard material={result.data} />
           <MaterialPreview material={result.data} />
-          <FutureActions />
+          <FutureActions material={result.data} />
           <section aria-labelledby="delete-material-heading" className="brutal-card p-5 sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-zinc-600">
               Library management
@@ -205,4 +219,3 @@ export default async function MaterialDetailPage({
     </DashboardShell>
   );
 }
-

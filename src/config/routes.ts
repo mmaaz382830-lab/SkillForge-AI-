@@ -12,6 +12,7 @@ export const dashboardRoutes = {
   dashboard: "/dashboard",
   materials: "/dashboard/materials",
   materialDetail: (id: string) => `/dashboard/materials/${id}`,
+  chat: "/dashboard/chat",
   roadmaps: "/dashboard/roadmaps",
   flashcards: "/dashboard/flashcards",
   quizzes: "/dashboard/quizzes",
@@ -32,3 +33,4 @@ export const appRoutes = {
   dashboard: dashboardRoutes,
   admin: adminRoutes,
 } as const;
+

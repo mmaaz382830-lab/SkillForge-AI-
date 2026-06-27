@@ -1,0 +1,153 @@
+import "server-only";
+
+import { z } from "zod";
+
+import { DEFAULT_GEMINI_TEXT_MODEL } from "@/lib/ai/constants";
+import { generateValidatedJson } from "@/lib/ai/generate";
+import type { GenerateValidatedJsonResult } from "@/lib/ai/generate";
+
+import type { RetrievedMaterialChunk } from "./retrieval";
+
+export const RAG_INSUFFICIENT_CONTEXT_MESSAGE =
+  "I could not find enough context in your uploaded material.";
+
+export type RagSourceSnippet = {
+  chunk_id: string;
+  material_id: string;
+  chunk_index: number;
+  snippet: string;
+  similarity: number;
+};
+
+export type GroundedAnswerResult = {
+  answer: string;
+  insufficient_context: boolean;
+  source_chunk_ids: string[];
+  sources: RagSourceSnippet[];
+  model: string | null;
+  provider: GenerateValidatedJsonResult<GroundedAnswerOutput>["provider"] | null;
+  retry_count: 0 | 1;
+};
+
+type GroundedAnswerOutput = z.infer<typeof groundedAnswerOutputSchema>;
+
+const MAX_CONTEXT_CHUNKS = 8;
+const MAX_CONTEXT_CHARS_PER_CHUNK = 1_800;
+const SOURCE_SNIPPET_CHARS = 260;
+
+const groundedAnswerOutputSchema = z.object({
+  answer: z.string().trim().min(1),
+  insufficient_context: z.boolean(),
+});
+
+function trimForContext(content: string): string {
+  return content.trim().slice(0, MAX_CONTEXT_CHARS_PER_CHUNK);
+}
+
+function buildRetrievedContext(chunks: RetrievedMaterialChunk[]): string {
+  return chunks
+    .slice(0, MAX_CONTEXT_CHUNKS)
+    .map((chunk, index) => {
+      return [
+        `Context ${index + 1}`,
+        `Chunk index: ${chunk.chunk_index}`,
+        `Similarity: ${chunk.similarity.toFixed(4)}`,
+        trimForContext(chunk.content),
+      ].join("\n");
+    })
+    .join("\n\n---\n\n");
+}
+
+function normalizeSnippet(content: string): string {
+  const snippet = content.replace(/\s+/g, " ").trim().slice(0, SOURCE_SNIPPET_CHARS);
+
+  return snippet.length === SOURCE_SNIPPET_CHARS ? `${snippet}...` : snippet;
+}
+
+export function buildSourceSnippets(
+  chunks: RetrievedMaterialChunk[],
+): RagSourceSnippet[] {
+  return chunks.map((chunk) => ({
+    chunk_id: chunk.id,
+    material_id: chunk.material_id,
+    chunk_index: chunk.chunk_index,
+    snippet: normalizeSnippet(chunk.content),
+    similarity: chunk.similarity,
+  }));
+}
+
+function buildGroundedAnswerPrompt(input: {
+  question: string;
+  chunks: RetrievedMaterialChunk[];
+}): string {
+  return `You are SkillForge AI, a source-grounded study assistant.
+
+TASK:
+Answer the user's question using only the retrieved context chunks below.
+
+USER QUESTION:
+${input.question}
+
+RETRIEVED CONTEXT CHUNKS:
+${buildRetrievedContext(input.chunks)}
+
+RULES:
+- Use only the retrieved context chunks.
+- Do not use general knowledge unless it is directly supported by the retrieved context.
+- Do not invent facts, citations, page numbers, or source references.
+- If the retrieved context does not contain enough information, set insufficient_context to true and set answer exactly to: "${RAG_INSUFFICIENT_CONTEXT_MESSAGE}"
+- Keep the answer clear, student-friendly, and concise.
+- Do not mention internal chunk IDs in the answer.
+- Return valid JSON only. Do not include markdown fences or prose outside JSON.
+
+Return JSON with this exact shape:
+{
+  "answer": "Clear grounded answer or the exact insufficient context message",
+  "insufficient_context": false
+}`;
+}
+
+export async function generateGroundedAnswer(input: {
+  question: string;
+  chunks: RetrievedMaterialChunk[];
+}): Promise<GroundedAnswerResult> {
+  const question = input.question.trim();
+  const chunks = input.chunks.filter((chunk) => chunk.content.trim());
+
+  if (!question || chunks.length === 0) {
+    return {
+      answer: RAG_INSUFFICIENT_CONTEXT_MESSAGE,
+      insufficient_context: true,
+      source_chunk_ids: [],
+      sources: [],
+      model: null,
+      provider: null,
+      retry_count: 0,
+    };
+  }
+
+  const generation = await generateValidatedJson({
+    prompt: buildGroundedAnswerPrompt({ question, chunks }),
+    schema: groundedAnswerOutputSchema,
+    validationHint:
+      "Return { answer: string, insufficient_context: boolean }. If context is insufficient, answer must be the exact insufficient-context sentence.",
+    model: DEFAULT_GEMINI_TEXT_MODEL,
+    temperature: 0.1,
+  });
+
+  const insufficient = generation.data.insufficient_context;
+  const answer = insufficient
+    ? RAG_INSUFFICIENT_CONTEXT_MESSAGE
+    : generation.data.answer.trim();
+  const sourceChunkIds = insufficient ? [] : chunks.map((chunk) => chunk.id);
+
+  return {
+    answer,
+    insufficient_context: insufficient,
+    source_chunk_ids: sourceChunkIds,
+    sources: insufficient ? [] : buildSourceSnippets(chunks),
+    model: generation.model,
+    provider: generation.provider,
+    retry_count: generation.retryCount,
+  };
+}
