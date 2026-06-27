@@ -3,8 +3,22 @@
 import { revalidatePath } from "next/cache";
 
 import { dashboardRoutes } from "@/config/routes";
+import {
+  AI_SAFE_MESSAGES,
+  AiConfigurationError,
+  AiInvalidOutputError,
+  AiProviderError,
+  AiUsageLimitError,
+  buildRoadmapPrompt,
+  generateValidatedJson,
+  getSafeAiErrorMessage,
+  logAiUsageEvent,
+} from "@/lib/ai";
+import { aiRoadmapOutputSchema, type AiRoadmapOutput } from "@/lib/ai/schemas";
+import { assertAiUsageAllowed } from "@/lib/ai/usage";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
+  AiRoadmapGenerationInput,
   LearningGoal,
   LearningGoalInput,
   ProgressEvent,
@@ -23,6 +37,7 @@ import {
   verifyRoadmapOwnership,
 } from "./queries";
 import {
+  validateAiRoadmapGenerationInput,
   validateLearningGoalInput,
   validateRoadmapInput,
   validateRoadmapTaskInput,
@@ -32,9 +47,145 @@ import {
 const GOAL_SELECT =
   "id,user_id,title,description,category,difficulty,target_date,created_at,updated_at";
 const ROADMAP_SELECT =
-  "id,user_id,goal_id,title,description,difficulty,estimated_duration,ai_generated,created_at,updated_at";
+  "id,user_id,goal_id,material_id,title,description,difficulty,estimated_duration,ai_generated,created_at,updated_at";
 const TASK_SELECT =
   "id,roadmap_id,user_id,title,description,status,order_index,estimated_time,completed_at,created_at,updated_at";
+
+type CompletedMaterialForRoadmap = {
+  id: string;
+  title: string;
+  extracted_text: string | null;
+  processing_status: string;
+  deleted_at: string | null;
+};
+
+const ROADMAP_GENERATION_VALIDATION_HINT =
+  "Return title, description, difficulty, estimated_duration, and 5 to 10 ordered tasks. Each task needs order_index, title, description, and estimated_time.";
+
+function getErrorCode(error: unknown): string {
+  if (error instanceof AiInvalidOutputError) {
+    return "INVALID_OUTPUT";
+  }
+
+  if (error instanceof AiConfigurationError) {
+    return "AI_CONFIGURATION_UNAVAILABLE";
+  }
+
+  if (error instanceof AiProviderError) {
+    return `AI_PROVIDER_${error.code.toUpperCase()}`;
+  }
+
+  return "ROADMAP_GENERATION_FAILED";
+}
+
+function buildRoadmapUsageMetadata(input: {
+  materialId?: string | null;
+  goalId?: string | null;
+  difficulty: string;
+  durationMs?: number;
+  retryCount?: number;
+  errorCode?: string;
+}) {
+  return {
+    material_id: input.materialId ?? null,
+    goal_id: input.goalId ?? null,
+    difficulty: input.difficulty,
+    duration_ms: input.durationMs ?? null,
+    retry_count: input.retryCount ?? null,
+    error_code: input.errorCode ?? null,
+  };
+}
+
+async function logRoadmapGenerationError(input: {
+  userId: string;
+  materialId?: string | null;
+  goalId?: string | null;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  errorCode: string;
+}) {
+  await logAiUsageEvent({
+    userId: input.userId,
+    featureType: "roadmap",
+    status: "error",
+    errorCode: input.errorCode,
+    metadata: buildRoadmapUsageMetadata(input),
+  });
+}
+
+function normalizeGeneratedRoadmapTasks(
+  output: AiRoadmapOutput,
+): Array<Pick<RoadmapTask, "title" | "description" | "order_index" | "estimated_time">> {
+  if (output.tasks.length < 5 || output.tasks.length > 10) {
+    throw new AiInvalidOutputError();
+  }
+
+  return [...output.tasks]
+    .sort((first, second) => first.order_index - second.order_index)
+    .map((task, index) => ({
+      title: task.title,
+      description: task.description,
+      order_index: index + 1,
+      estimated_time: task.estimated_time ?? null,
+    }));
+}
+
+function buildRoadmapGoalSubject(input: {
+  goal: LearningGoal | null;
+  topic: string | null;
+}): string | undefined {
+  const parts = [
+    input.goal?.title,
+    input.goal?.description,
+    input.topic,
+  ].filter((part): part is string => Boolean(part?.trim()));
+
+  return parts.length > 0 ? parts.join(" - ") : undefined;
+}
+
+async function loadOwnedCompletedMaterialForRoadmap(input: {
+  materialId: string;
+  userId: string;
+}): Promise<CompletedMaterialForRoadmap | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("materials")
+    .select("id,title,extracted_text,processing_status,deleted_at")
+    .eq("id", input.materialId)
+    .eq("user_id", input.userId)
+    .is("deleted_at", null)
+    .maybeSingle<CompletedMaterialForRoadmap>();
+
+  if (error || !data) {
+    return null;
+  }
+
+  if (data.processing_status !== "completed" || !data.extracted_text?.trim()) {
+    return null;
+  }
+
+  return data;
+}
+
+async function loadOwnedLearningGoal(input: {
+  goalId: string;
+  userId: string;
+}): Promise<LearningGoal | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("learning_goals")
+    .select(GOAL_SELECT)
+    .eq("id", input.goalId)
+    .eq("user_id", input.userId)
+    .maybeSingle<LearningGoal>();
+
+  if (error) {
+    return null;
+  }
+
+  return data;
+}
 
 function revalidateRoadmapViews(roadmapId?: string) {
   revalidatePath(dashboardRoutes.dashboard);
@@ -227,6 +378,7 @@ export async function createRoadmap(
     .from("roadmaps")
     .insert({
       ...validation.data,
+      material_id: null,
       ai_generated: false,
       user_id: user.data,
     })
@@ -246,6 +398,205 @@ export async function createRoadmap(
     ok: true,
     data,
   };
+}
+
+export async function generateAiRoadmap(
+  input: AiRoadmapGenerationInput,
+): Promise<RoadmapActionResult<Roadmap>> {
+  const startedAt = Date.now();
+  const user = await getAuthenticatedUserId();
+
+  if (!user.ok) {
+    return user;
+  }
+
+  const validation = validateAiRoadmapGenerationInput(input);
+
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const material = validation.data.material_id
+    ? await loadOwnedCompletedMaterialForRoadmap({
+        materialId: validation.data.material_id,
+        userId: user.data,
+      })
+    : null;
+
+  if (validation.data.material_id && !material) {
+    return {
+      ok: false,
+      error: "Select a processed material first.",
+    };
+  }
+
+  const goal = validation.data.goal_id
+    ? await loadOwnedLearningGoal({
+        goalId: validation.data.goal_id,
+        userId: user.data,
+      })
+    : null;
+
+  if (validation.data.goal_id && !goal) {
+    return {
+      ok: false,
+      error: "You do not have access to this item.",
+    };
+  }
+
+  const usageMetadata = buildRoadmapUsageMetadata({
+    materialId: validation.data.material_id,
+    goalId: validation.data.goal_id,
+    difficulty: validation.data.difficulty,
+  });
+
+  try {
+    await assertAiUsageAllowed({
+      userId: user.data,
+      featureType: "roadmap",
+      metadata: usageMetadata,
+    });
+
+    const prompt = buildRoadmapPrompt({
+      goalTitle: buildRoadmapGoalSubject({
+        goal,
+        topic: validation.data.topic,
+      }),
+      topic: validation.data.topic ?? material?.title,
+      targetDuration: validation.data.estimated_duration ?? undefined,
+      difficulty: validation.data.difficulty,
+      materialContext: material?.extracted_text ?? undefined,
+      taskCount: validation.data.task_count ?? undefined,
+    });
+
+    const generated = await generateValidatedJson({
+      prompt,
+      schema: aiRoadmapOutputSchema,
+      validationHint: ROADMAP_GENERATION_VALIDATION_HINT,
+      temperature: 0.25,
+    });
+    const generatedTasks = normalizeGeneratedRoadmapTasks(generated.data);
+    const supabase = await createSupabaseServerClient();
+    const { data: roadmap, error: roadmapError } = await supabase
+      .from("roadmaps")
+      .insert({
+        user_id: user.data,
+        goal_id: validation.data.goal_id,
+        material_id: validation.data.material_id,
+        title: generated.data.title,
+        description: generated.data.description,
+        difficulty: generated.data.difficulty,
+        estimated_duration: generated.data.estimated_duration,
+        ai_generated: true,
+      })
+      .select(ROADMAP_SELECT)
+      .maybeSingle<Roadmap>();
+
+    if (roadmapError || !roadmap) {
+      const errorCode = "ROADMAP_SAVE_FAILED";
+      await logRoadmapGenerationError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        goalId: validation.data.goal_id,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+      });
+
+      return {
+        ok: false,
+        error: "Could not save roadmap. Please try again.",
+      };
+    }
+
+    const { error: tasksError } = await supabase.from("roadmap_tasks").insert(
+      generatedTasks.map((task) => ({
+        roadmap_id: roadmap.id,
+        user_id: user.data,
+        title: task.title,
+        description: task.description,
+        status: "todo",
+        order_index: task.order_index,
+        estimated_time: task.estimated_time,
+      })),
+    );
+
+    if (tasksError) {
+      await supabase
+        .from("roadmaps")
+        .delete()
+        .eq("id", roadmap.id)
+        .eq("user_id", user.data);
+
+      const errorCode = "ROADMAP_TASK_SAVE_FAILED";
+      await logRoadmapGenerationError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        goalId: validation.data.goal_id,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+      });
+
+      return {
+        ok: false,
+        error: "Could not save roadmap. Please try again.",
+      };
+    }
+
+    await logAiUsageEvent({
+      userId: user.data,
+      featureType: "roadmap",
+      status: "success",
+      provider: generated.provider,
+      model: generated.model,
+      metadata: buildRoadmapUsageMetadata({
+        materialId: validation.data.material_id,
+        goalId: validation.data.goal_id,
+        difficulty: generated.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+      }),
+    });
+
+    revalidateRoadmapViews(roadmap.id);
+
+    return {
+      ok: true,
+      data: roadmap,
+    };
+  } catch (error) {
+    if (error instanceof AiUsageLimitError) {
+      return {
+        ok: false,
+        error: error.safeMessage,
+      };
+    }
+
+    const errorCode = getErrorCode(error);
+    await logRoadmapGenerationError({
+      userId: user.data,
+      materialId: validation.data.material_id,
+      goalId: validation.data.goal_id,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      errorCode,
+    });
+
+    if (error instanceof AiConfigurationError) {
+      return {
+        ok: false,
+        error: AI_SAFE_MESSAGES.configurationUnavailable,
+      };
+    }
+
+    return {
+      ok: false,
+      error: getSafeAiErrorMessage(error),
+    };
+  }
 }
 
 export async function updateRoadmap(

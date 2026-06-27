@@ -22,6 +22,7 @@ export type Roadmap = {
   id: string;
   user_id: string;
   goal_id: string | null;
+  material_id: string | null;
   title: string;
   description: string | null;
   difficulty: DifficultyLevel;
@@ -78,6 +79,15 @@ export type RoadmapInput = {
   difficulty?: DifficultyLevel;
   estimated_duration?: string | null;
   goal_id?: string | null;
+};
+
+export type AiRoadmapGenerationInput = {
+  material_id?: string | null;
+  goal_id?: string | null;
+  topic?: string | null;
+  difficulty?: DifficultyLevel;
+  estimated_duration?: string | null;
+  task_count?: number | null;
 };
 
 export type RoadmapTaskInput = {
