@@ -297,3 +297,92 @@ export async function getChatSessionMessages(
   };
 }
 
+export type MaterialChunkSnippet = {
+  id: string;
+  material_id: string;
+  chunk_index: number;
+  snippet: string;
+};
+
+export async function getChunksByIds(input: {
+  chunkIds: string[];
+  userId: string;
+}): Promise<MaterialActionResult<MaterialChunkSnippet[]>> {
+  if (input.chunkIds.length === 0) {
+    return { ok: true, data: [] };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("material_chunks")
+    .select("id,material_id,chunk_index,content")
+    .in("id", input.chunkIds)
+    .eq("user_id", input.userId)
+    .returns<{ id: string; material_id: string; chunk_index: number; content: string }[]>();
+
+  if (error) {
+    return {
+      ok: false,
+      error: "Could not load source snippets.",
+    };
+  }
+
+  const SOURCE_SNIPPET_CHARS = 260;
+
+  function normalizeSnippet(content: string): string {
+    const snippet = content.replace(/\s+/g, " ").trim().slice(0, SOURCE_SNIPPET_CHARS);
+    return snippet.length === SOURCE_SNIPPET_CHARS ? `${snippet}...` : snippet;
+  }
+
+  return {
+    ok: true,
+    data: (data ?? []).map((row) => ({
+      id: row.id,
+      material_id: row.material_id,
+      chunk_index: row.chunk_index,
+      snippet: normalizeSnippet(row.content),
+    })),
+  };
+}
+
+export async function renameChatSession(input: {
+  sessionId: string;
+  title: string;
+}): Promise<MaterialActionResult<{ id: string; title: string }>> {
+  const id = input.sessionId.trim();
+  const title = input.title.replace(/\s+/g, " ").trim().slice(0, 80);
+
+  if (!id) {
+    return { ok: false, error: "Chat session not found." };
+  }
+
+  if (!title) {
+    return { ok: false, error: "Please enter a session name." };
+  }
+
+  const user = await getAuthenticatedRagUserId();
+
+  if (!user.ok) {
+    return user;
+  }
+
+  const session = await getOwnedChatSession({ sessionId: id, userId: user.data });
+
+  if (!session.ok) {
+    return session;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("chat_sessions")
+    .update({ title })
+    .eq("id", id)
+    .eq("user_id", user.data)
+    .is("deleted_at", null);
+
+  if (error) {
+    return { ok: false, error: "Could not rename chat session." };
+  }
+
+  return { ok: true, data: { id, title } };
+}

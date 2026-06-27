@@ -33,6 +33,8 @@ import {
   getOwnedChatSession,
   getOwnedCompletedMaterialForRag,
   getChatSessionMessages,
+  getChunksByIds,
+  renameChatSession,
   type ChatMessage,
   type ChatMessageRole,
   type ChatMessageView,
@@ -971,3 +973,56 @@ export async function loadChatSessionMessages(
   return getChatSessionMessages(sessionId);
 }
 
+export async function renameChatSessionAction(input: {
+  sessionId: string;
+  title: string;
+}): Promise<MaterialActionResult<{ id: string; title: string }>> {
+  const result = await renameChatSession(input);
+
+  if (result.ok) {
+    revalidateChatViews();
+  }
+
+  return result;
+}
+
+export async function loadSourceSnippetsForMessage(input: {
+  sessionId: string;
+  chunkIds: string[];
+}): Promise<MaterialActionResult<{ id: string; material_id: string; chunk_index: number; snippet: string; similarity: number }[]>> {
+  const sessionId = input.sessionId.trim();
+
+  if (!sessionId) {
+    return { ok: false, error: "Chat session not found." };
+  }
+
+  const user = await getAuthenticatedRagUserId();
+
+  if (!user.ok) {
+    return user;
+  }
+
+  // Verify session belongs to this user
+  const session = await getOwnedChatSession({ sessionId, userId: user.data });
+
+  if (!session.ok) {
+    return session;
+  }
+
+  const chunks = await getChunksByIds({ chunkIds: input.chunkIds, userId: user.data });
+
+  if (!chunks.ok) {
+    return chunks;
+  }
+
+  return {
+    ok: true,
+    data: chunks.data.map((chunk) => ({
+      id: chunk.id,
+      material_id: chunk.material_id,
+      chunk_index: chunk.chunk_index,
+      snippet: chunk.snippet,
+      similarity: 0,
+    })),
+  };
+}

@@ -11,7 +11,7 @@ import { listChatSessions } from "@/lib/rag/queries";
 export const metadata: Metadata = {
   title: `Chat with Notes - ${siteConfig.name}`,
   description:
-    "Ask source-grounded questions from completed uploaded materials.",
+    "Ask questions from your own notes and get answers grounded in your material.",
 };
 
 type RagChatPageProps = {
@@ -59,8 +59,8 @@ export default async function RagChatPage({ searchParams }: RagChatPageProps) {
   return (
     <DashboardShell
       activePath={dashboardRoutes.chat}
-      description="Ask questions from your own uploaded material. Answers stay grounded in retrieved source chunks."
-      title="Chat with Notes"
+      description="Chat with your own notes and get answers that come straight from your material."
+      title="Chat with your notes"
     >
       {!materialsResult.ok ? (
         <ErrorState

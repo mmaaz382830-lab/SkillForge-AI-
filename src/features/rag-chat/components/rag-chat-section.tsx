@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 
 import { EmptyState } from "@/components/states/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,9 @@ import {
   createChatSession,
   indexMaterialForRag,
   loadChatSessionMessages,
+  loadSourceSnippetsForMessage,
+  renameChatSessionAction,
+  softDeleteChatSession,
 } from "@/lib/rag/actions";
 import type {
   ChatMessageView,
@@ -22,12 +25,14 @@ import type {
 import { cn } from "@/lib/utils/cn";
 import type { MaterialListItem } from "@/types/materials";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type RagChatMaterial = Pick<
   MaterialListItem,
   "id" | "title" | "type" | "chunk_count" | "created_at"
 >;
 
-type RagSourceSnippet = {
+type SourceSnippet = {
   chunk_id: string;
   material_id: string;
   chunk_index: number;
@@ -48,6 +53,10 @@ type RagChatSectionProps = {
   sessions: ChatSessionListItem[];
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const ALL_MATERIALS_VALUE = "__all__";
+
 function getMessageInsufficientContext(message: ChatMessageView): boolean {
   return Boolean(
     message.metadata &&
@@ -58,70 +67,133 @@ function getMessageInsufficientContext(message: ChatMessageView): boolean {
 }
 
 function getMaterialTypeLabel(type: MaterialListItem["type"]): string {
-  if (type === "pasted_text") {
-    return "Pasted text";
-  }
-
+  if (type === "pasted_text") return "Pasted text";
   return type.toUpperCase();
 }
 
 function buildSessionTitle(material: RagChatMaterial | undefined): string {
-  if (!material) {
-    return "New note chat";
-  }
-
+  if (!material) return "New chat";
   return `${material.title} chat`;
 }
 
 function sortSessions(sessions: ChatSessionListItem[]): ChatSessionListItem[] {
   return [...sessions].sort(
-    (first, second) =>
-      new Date(second.updated_at).getTime() - new Date(first.updated_at).getTime(),
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
   );
 }
 
-function SourceCards({ sources }: { sources: RagSourceSnippet[] }) {
-  const visibleSources = sources.slice(0, 4);
+// ─── SourceCards ─────────────────────────────────────────────────────────────
 
-  if (visibleSources.length === 0) {
-    return null;
+function SourceCards({
+  sources,
+  materials,
+}: {
+  sources: SourceSnippet[];
+  materials: RagChatMaterial[];
+}) {
+  const visible = sources.slice(0, 4);
+
+  if (visible.length === 0) return null;
+
+  function getMaterialTitle(materialId: string): string | undefined {
+    return materials.find((m) => m.id === materialId)?.title;
   }
 
   return (
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      {visibleSources.map((source) => (
-        <article
-          className="rounded-lg border-2 border-black bg-paper-base p-3 text-sm shadow-brutal-sm"
-          key={source.chunk_id}
-        >
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <Badge variant="blue">Chunk {source.chunk_index + 1}</Badge>
-            <span className="text-xs font-black text-zinc-600">
-              Match {Math.round(source.similarity * 100)}%
-            </span>
-          </div>
-          <p className="font-semibold leading-6">{source.snippet}</p>
-        </article>
-      ))}
-      {sources.length > visibleSources.length ? (
+      {visible.map((source) => {
+        const matTitle = getMaterialTitle(source.material_id);
+        return (
+          <article
+            className="rounded-lg border-2 border-black bg-paper-base p-3 text-sm shadow-brutal-sm"
+            key={source.chunk_id}
+          >
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <Badge variant="blue">Section {source.chunk_index + 1}</Badge>
+              {source.similarity > 0 ? (
+                <span className="text-xs font-black text-zinc-600">
+                  Relevance {Math.round(source.similarity * 100)}%
+                </span>
+              ) : null}
+            </div>
+            {matTitle ? (
+              <p className="mb-1 truncate text-xs font-black text-zinc-500">{matTitle}</p>
+            ) : null}
+            <p className="font-semibold leading-6">{source.snippet}</p>
+          </article>
+        );
+      })}
+      {sources.length > visible.length ? (
         <p className="rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6">
-          {sources.length - visibleSources.length} more source chunks supported this answer.
+          {sources.length - visible.length} more sections also supported this answer.
         </p>
       ) : null}
     </div>
   );
 }
 
+// ─── MessageCard ─────────────────────────────────────────────────────────────
+
 function MessageCard({
   message,
   sources,
+  materials,
+  loadingSources,
 }: {
   message: ChatMessageView;
-  sources: RagSourceSnippet[];
+  sources: SourceSnippet[];
+  materials: RagChatMaterial[];
+  loadingSources?: boolean;
 }) {
   const isAssistant = message.role === "assistant";
   const insufficient = isAssistant && getMessageInsufficientContext(message);
-  const savedSourceCount = message.source_chunk_ids?.length ?? 0;
+  const savedCount = message.source_chunk_ids?.length ?? 0;
+
+  // Render answer with basic markdown: ## headings and - bullet lists
+  function renderAnswer(text: string) {
+    const lines = text.split("\n");
+    const elements: React.ReactNode[] = [];
+    let listItems: string[] = [];
+
+    function flushList(key: string) {
+      if (listItems.length === 0) return;
+      elements.push(
+        <ul className="mt-2 space-y-1 pl-4" key={key}>
+          {listItems.map((item, i) => (
+            <li className="list-disc text-base font-semibold leading-7" key={i}>
+              {item}
+            </li>
+          ))}
+        </ul>,
+      );
+      listItems = [];
+    }
+
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("## ")) {
+        flushList(`list-${i}`);
+        elements.push(
+          <p className="mt-3 font-heading text-base font-black leading-tight" key={i}>
+            {trimmed.slice(3)}
+          </p>,
+        );
+      } else if (trimmed.startsWith("- ")) {
+        listItems.push(trimmed.slice(2));
+      } else if (trimmed === "") {
+        flushList(`list-${i}`);
+      } else {
+        flushList(`list-${i}`);
+        elements.push(
+          <p className="mt-2 text-base font-semibold leading-7" key={i}>
+            {trimmed}
+          </p>,
+        );
+      }
+    });
+    flushList("list-end");
+    return <>{elements}</>;
+  }
 
   return (
     <article
@@ -133,27 +205,51 @@ function MessageCard({
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge variant={isAssistant ? "blue" : "neutral"}>
-          {isAssistant ? "Study answer" : "Your question"}
+          {isAssistant ? "Answer" : "Your question"}
         </Badge>
-        {insufficient ? <Badge variant="yellow">Insufficient context</Badge> : null}
+        {insufficient ? <Badge variant="yellow">Not in your notes</Badge> : null}
       </div>
-      <p className="whitespace-pre-wrap text-base font-semibold leading-7">
-        {message.content}
-      </p>
-      {insufficient ? (
-        <p className="mt-3 rounded-lg border-2 border-black bg-paper-base p-3 text-sm font-black leading-6 shadow-brutal-sm">
-          The answer is limited to what was found in this material. Try a narrower question or index a more complete source.
+
+      {isAssistant ? (
+        renderAnswer(message.content)
+      ) : (
+        <p className="text-base font-semibold leading-7">{message.content}</p>
+      )}
+
+      {isAssistant && !insufficient ? (
+        <p className="mt-3 text-xs font-black uppercase tracking-wide text-zinc-600">
+          ✓ Answer generated from your material
         </p>
       ) : null}
-      {isAssistant ? <SourceCards sources={sources} /> : null}
-      {isAssistant && sources.length === 0 && savedSourceCount > 0 ? (
-        <p className="mt-4 rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6">
-          Source references saved ({savedSourceCount} chunks). Snippets display for newly generated answers only.
+
+      {insufficient ? (
+        <p className="mt-3 rounded-lg border-2 border-black bg-paper-base p-3 text-sm font-black leading-6 shadow-brutal-sm">
+          Your notes didn&apos;t have enough on this topic. Try a more specific question or add
+          more material.
         </p>
+      ) : null}
+
+      {isAssistant ? (
+        <SourceCards sources={sources} materials={materials} />
+      ) : null}
+
+      {isAssistant && sources.length === 0 && savedCount > 0 ? (
+        loadingSources ? (
+          <p className="mt-4 rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6">
+            Loading source sections…
+          </p>
+        ) : (
+          <p className="mt-4 rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6">
+            Source sections were saved with this answer.{" "}
+            <span className="text-zinc-500">(Prepared from {savedCount} sections)</span>
+          </p>
+        )
       ) : null}
     </article>
   );
 }
+
+// ─── RagChatSection ───────────────────────────────────────────────────────────
 
 export function RagChatSection({
   initialMaterialId,
@@ -163,45 +259,70 @@ export function RagChatSection({
 }: RagChatSectionProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
   const initialSelectedMaterialId =
-    initialMaterialId && materials.some((material) => material.id === initialMaterialId)
+    initialMaterialId && materials.some((m) => m.id === initialMaterialId)
       ? initialMaterialId
       : materials[0]?.id ?? "";
+
   const [materialRows, setMaterialRows] = useState<RagChatMaterial[]>(materials);
   const [sessionRows, setSessionRows] = useState<ChatSessionListItem[]>(sessions);
-  const [selectedMaterialId, setSelectedMaterialId] = useState(
-    initialSelectedMaterialId,
-  );
+  const [selectedMaterialId, setSelectedMaterialId] = useState(initialSelectedMaterialId);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [sourcesByMessageId, setSourcesByMessageId] = useState<
-    Record<string, RagSourceSnippet[]>
+    Record<string, SourceSnippet[]>
   >({});
+  const [loadingSourcesForMessageId, setLoadingSourcesForMessageId] = useState<string | null>(
+    null,
+  );
   const [question, setQuestion] = useState("");
   const [feedback, setFeedback] = useState<Feedback | null>(
     initialNotice ? { title: initialNotice, variant: "warning" } : null,
   );
-  const [indexingMaterialId, setIndexingMaterialId] = useState<string | null>(null);
+  const [preparingMaterialId, setPreparingMaterialId] = useState<string | null>(null);
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [asking, setAsking] = useState(false);
 
+  // Rename state
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renamePending, setRenamePending] = useState(false);
+
+  // Delete state
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+
+  const isAllMaterials = selectedMaterialId === ALL_MATERIALS_VALUE;
+
   const selectedMaterial = useMemo(
-    () => materialRows.find((material) => material.id === selectedMaterialId),
-    [materialRows, selectedMaterialId],
+    () => (isAllMaterials ? undefined : materialRows.find((m) => m.id === selectedMaterialId)),
+    [materialRows, selectedMaterialId, isAllMaterials],
   );
-  const selectedMaterialSessions = useMemo(
-    () =>
-      sortSessions(
-        sessionRows.filter(
-          (session) => session.material_id === selectedMaterialId,
-        ),
-      ),
-    [selectedMaterialId, sessionRows],
+
+  const preparedMaterials = useMemo(
+    () => materialRows.filter((m) => (m.chunk_count ?? 0) > 0),
+    [materialRows],
   );
-  const selectedMaterialIndexed = Boolean(
-    selectedMaterial && selectedMaterial.chunk_count > 0,
-  );
+
+  const selectedMaterialPrepared = isAllMaterials
+    ? preparedMaterials.length > 0
+    : Boolean(selectedMaterial && (selectedMaterial.chunk_count ?? 0) > 0);
+
+  const selectedMaterialSessions = useMemo(() => {
+    if (isAllMaterials) {
+      return sortSessions(sessionRows.filter((s) => !s.material_id));
+    }
+    return sortSessions(
+      sessionRows.filter((s) => s.material_id === selectedMaterialId),
+    );
+  }, [selectedMaterialId, sessionRows, isAllMaterials]);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   function refreshRoute() {
     startTransition(() => {
@@ -209,14 +330,51 @@ export function RagChatSection({
     });
   }
 
-  function handleMaterialChange(materialId: string) {
+  function handleMaterialChange(value: string) {
     setFeedback(null);
     setQuestion("");
-    setSelectedMaterialId(materialId);
+    setSelectedMaterialId(value);
     setSelectedSessionId("");
     setMessages([]);
     setSourcesByMessageId({});
   }
+
+  // ── Load historical source snippets for old messages ──────────────────────
+
+  async function loadHistoricalSources(
+    loadedMessages: ChatMessageView[],
+    sessionId: string,
+  ) {
+    for (const msg of loadedMessages) {
+      if (
+        msg.role === "assistant" &&
+        msg.source_chunk_ids &&
+        msg.source_chunk_ids.length > 0
+      ) {
+        setLoadingSourcesForMessageId(msg.id);
+        const result = await loadSourceSnippetsForMessage({
+          sessionId,
+          chunkIds: msg.source_chunk_ids,
+        });
+        setLoadingSourcesForMessageId(null);
+
+        if (result.ok && result.data.length > 0) {
+          setSourcesByMessageId((prev) => ({
+            ...prev,
+            [msg.id]: result.data.map((c) => ({
+              chunk_id: c.id,
+              material_id: c.material_id,
+              chunk_index: c.chunk_index,
+              snippet: c.snippet,
+              similarity: c.similarity,
+            })),
+          }));
+        }
+      }
+    }
+  }
+
+  // ── Session actions ────────────────────────────────────────────────────────
 
   async function handleSelectSession(sessionId: string) {
     setFeedback(null);
@@ -225,7 +383,6 @@ export function RagChatSection({
     setLoadingSessionId(sessionId);
 
     const result = await loadChatSessionMessages(sessionId);
-
     setLoadingSessionId(null);
 
     if (!result.ok) {
@@ -235,74 +392,72 @@ export function RagChatSection({
     }
 
     setMessages(result.data);
+    void loadHistoricalSources(result.data, sessionId);
   }
 
-  async function handleIndexMaterial() {
-    if (!selectedMaterial) {
-      return;
-    }
+  async function handlePrepareMaterial() {
+    if (!selectedMaterial) return;
 
     setFeedback(null);
-    setIndexingMaterialId(selectedMaterial.id);
+    setPreparingMaterialId(selectedMaterial.id);
 
     const result = await indexMaterialForRag(selectedMaterial.id);
-
-    setIndexingMaterialId(null);
+    setPreparingMaterialId(null);
 
     if (!result.ok) {
       setFeedback({ variant: "error", title: result.error });
       return;
     }
 
-    setMaterialRows((currentRows) =>
-      currentRows.map((material) =>
-        material.id === result.data.material_id
-          ? { ...material, chunk_count: result.data.chunk_count }
-          : material,
+    setMaterialRows((rows) =>
+      rows.map((m) =>
+        m.id === result.data.material_id
+          ? { ...m, chunk_count: result.data.chunk_count }
+          : m,
       ),
     );
     setFeedback({
       variant: "success",
-      title: "Material indexed for chat.",
-      description: `${result.data.chunk_count} source chunks are ready for grounded answers.`,
+      title: "Material is ready to chat!",
+      description: `Prepared from ${result.data.chunk_count} sections.`,
     });
     refreshRoute();
   }
 
   async function handleCreateSession(): Promise<ChatSessionListItem | null> {
-    if (!selectedMaterial) {
-      return null;
-    }
+    const materialIdForSession = isAllMaterials ? null : selectedMaterial?.id ?? null;
+
+    if (!isAllMaterials && !selectedMaterial) return null;
 
     const activeSession = selectedMaterialSessions.find(
-      (session) => session.id === selectedSessionId,
+      (s) => s.id === selectedSessionId,
     );
 
     if (activeSession && messages.length === 0 && !loadingSessionId) {
       setFeedback({
         variant: "info",
         title: "This chat is already empty.",
-        description: "Ask the first question here before starting another session.",
+        description: "Ask your first question to get started.",
       });
       return activeSession;
     }
 
     if (!selectedSessionId && selectedMaterialSessions.length > 0) {
-      const latestSession = selectedMaterialSessions[0];
-      await handleSelectSession(latestSession.id);
+      const latest = selectedMaterialSessions[0];
+      await handleSelectSession(latest.id);
       setFeedback({
         variant: "info",
-        title: "Opened the latest chat for this material.",
-        description: "Use New chat again after selecting a session with messages.",
+        title: "Opened the latest chat.",
+        description: "Use New chat again after the session has messages.",
       });
-      return latestSession;
+      return latest;
     }
 
     setFeedback(null);
     setCreatingSession(true);
 
     const result = await createChatSession({
-      materialId: selectedMaterial.id,
+      materialId: materialIdForSession,
       title: buildSessionTitle(selectedMaterial),
     });
 
@@ -313,37 +468,101 @@ export function RagChatSection({
       return null;
     }
 
-    setSessionRows((currentRows) => [result.data, ...currentRows]);
+    setSessionRows((rows) => [result.data, ...rows]);
     setSelectedSessionId(result.data.id);
     setMessages([]);
     setSourcesByMessageId({});
     setFeedback({
       variant: "success",
-      title: "Chat session started.",
-      description: "Ask a question from this material when you are ready.",
+      title: "New chat started.",
+      description: "Ask anything from your notes.",
     });
     refreshRoute();
     return result.data;
   }
 
+  // ── Rename ─────────────────────────────────────────────────────────────────
+
+  function startRename(session: ChatSessionListItem) {
+    setRenamingSessionId(session.id);
+    setRenameValue(session.title);
+    setTimeout(() => renameInputRef.current?.focus(), 50);
+  }
+
+  function cancelRename() {
+    setRenamingSessionId(null);
+    setRenameValue("");
+  }
+
+  async function commitRename(sessionId: string) {
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      cancelRename();
+      return;
+    }
+    setRenamePending(true);
+    const result = await renameChatSessionAction({ sessionId, title: trimmed });
+    setRenamePending(false);
+
+    if (!result.ok) {
+      setFeedback({ variant: "error", title: result.error });
+      cancelRename();
+      return;
+    }
+
+    setSessionRows((rows) =>
+      rows.map((s) => (s.id === sessionId ? { ...s, title: result.data.title } : s)),
+    );
+    cancelRename();
+    setFeedback({ variant: "success", title: "Session renamed." });
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
+  async function handleDeleteSession(sessionId: string) {
+    setDeletingSessionId(sessionId);
+    const result = await softDeleteChatSession(sessionId);
+    setDeletingSessionId(null);
+
+    if (!result.ok) {
+      setFeedback({ variant: "error", title: result.error });
+      return;
+    }
+
+    const remaining = sessionRows.filter((s) => s.id !== sessionId);
+    setSessionRows(remaining);
+
+    if (selectedSessionId === sessionId) {
+      setSelectedSessionId("");
+      setMessages([]);
+      setSourcesByMessageId({});
+    }
+
+    setFeedback({ variant: "success", title: "Chat deleted." });
+    refreshRoute();
+  }
+
+  // ── Ask question ───────────────────────────────────────────────────────────
+
   async function handleSubmitQuestion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedMaterial) {
+    if (!isAllMaterials && !selectedMaterial) {
       setFeedback({ variant: "error", title: "Select a material first." });
       return;
     }
 
-    if (!selectedMaterialIndexed) {
+    if (!selectedMaterialPrepared) {
       setFeedback({
         variant: "error",
-        title: "Index this material before asking questions.",
+        title: isAllMaterials
+          ? "No materials are prepared yet. Prepare at least one material first."
+          : "Prepare this material for chat first.",
       });
       return;
     }
 
     const trimmedQuestion = question.trim();
-
     if (!trimmedQuestion) {
       setFeedback({ variant: "error", title: "Please enter a question first." });
       return;
@@ -364,9 +583,21 @@ export function RagChatSection({
       return;
     }
 
+    // For "all materials" mode, we pick the first prepared material
+    // and rely on retrieval with filter_material_id = null (handled by the RPC)
+    const effectiveMaterialId = isAllMaterials
+      ? (preparedMaterials[0]?.id ?? "")
+      : (selectedMaterial?.id ?? "");
+
+    if (!effectiveMaterialId) {
+      setFeedback({ variant: "error", title: "No prepared material available." });
+      setAsking(false);
+      return;
+    }
+
     const result = await askRagChatQuestion({
       sessionId: activeSessionId,
-      materialId: selectedMaterial.id,
+      materialId: effectiveMaterialId,
       question: trimmedQuestion,
     });
 
@@ -375,9 +606,7 @@ export function RagChatSection({
     if (!result.ok) {
       setFeedback({ variant: "error", title: result.error });
       const reload = await loadChatSessionMessages(activeSessionId);
-      if (reload.ok) {
-        setMessages(reload.data);
-      }
+      if (reload.ok) setMessages(reload.data);
       return;
     }
 
@@ -388,7 +617,7 @@ export function RagChatSection({
       role: "user",
       content: trimmedQuestion,
       source_chunk_ids: null,
-      metadata: { material_id: selectedMaterial.id },
+      metadata: { material_id: effectiveMaterialId },
       created_at: now,
     };
     const assistantMessage: ChatMessageView = {
@@ -398,155 +627,237 @@ export function RagChatSection({
       content: result.data.answer,
       source_chunk_ids: result.data.source_chunk_ids,
       metadata: {
-        material_id: selectedMaterial.id,
+        material_id: effectiveMaterialId,
         insufficient_context: result.data.insufficient_context,
         source_count: result.data.sources.length,
       },
       created_at: now,
     };
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      userMessage,
-      assistantMessage,
-    ]);
-    setSourcesByMessageId((currentSources) => ({
-      ...currentSources,
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    setSourcesByMessageId((prev) => ({
+      ...prev,
       [assistantMessage.id]: result.data.sources,
     }));
     setQuestion("");
     setFeedback({
       variant: result.data.insufficient_context ? "warning" : "success",
       title: result.data.insufficient_context
-        ? "The notes did not have enough context."
+        ? "Your notes didn't have enough on this topic."
         : "Answer generated from your material.",
     });
     refreshRoute();
   }
 
+  // ── Empty state ────────────────────────────────────────────────────────────
+
   if (materialRows.length === 0) {
     return (
       <EmptyState
         accent="blue"
-        description="Upload and process a PDF, TXT, or pasted note before starting a source-grounded chat."
-        title="No completed materials ready for chat"
+        description="Upload and process a PDF, TXT, or pasted note first, then come back to chat with it."
+        title="No materials ready yet"
       />
     );
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
-    <section aria-labelledby="rag-chat-heading" className="grid gap-5">
+    <section aria-labelledby="chat-heading" className="grid gap-5">
       <div className="brutal-card overflow-hidden">
         <div className="grid gap-0 xl:grid-cols-[minmax(280px,0.42fr)_minmax(0,1fr)]">
+
+          {/* ── Sidebar ── */}
           <aside className="grid gap-5 border-b-2 border-black bg-paper-muted p-4 sm:p-5 xl:border-b-0 xl:border-r-2">
             <div>
               <p className="text-xs font-black uppercase text-zinc-500">
-                Source-grounded chat
+                Learn from your notes
               </p>
               <h2
                 className="mt-1 font-heading text-3xl font-black leading-tight"
-                id="rag-chat-heading"
+                id="chat-heading"
               >
-                Chat with notes
+                Chat with your notes
               </h2>
               <p className="mt-3 text-sm font-semibold leading-6">
-                Select one completed material, index it for chat if needed, then keep each conversation in its own session.
+                Pick a material, prepare it if needed, then ask questions in a session.
               </p>
             </div>
 
+            {/* Material selector */}
             <Select
-              helperText="Only completed materials with extracted text are shown."
-              label="Material"
-              onChange={(event) => handleMaterialChange(event.target.value)}
+              helperText="Only fully processed materials appear here."
+              label="Choose material"
+              onChange={(e) => handleMaterialChange(e.target.value)}
               value={selectedMaterialId}
             >
-              {materialRows.map((material) => (
-                <option key={material.id} value={material.id}>
-                  {material.title}
+              <option value={ALL_MATERIALS_VALUE}>All prepared materials</option>
+              {materialRows.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title}
                 </option>
               ))}
             </Select>
 
-            {selectedMaterial ? (
+            {/* Material status card */}
+            {!isAllMaterials && selectedMaterial ? (
               <div className="rounded-xl border-2 border-black bg-paper-base p-4 shadow-brutal-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="blue">{getMaterialTypeLabel(selectedMaterial.type)}</Badge>
-                  <Badge variant={selectedMaterialIndexed ? "success" : "yellow"}>
-                    {selectedMaterialIndexed
-                      ? `Indexed: ${selectedMaterial.chunk_count} chunks`
-                      : "Needs indexing"}
+                  <Badge
+                    variant={selectedMaterialPrepared ? "success" : "yellow"}
+                  >
+                    {selectedMaterialPrepared
+                      ? "Ready to chat"
+                      : "Needs preparation"}
                   </Badge>
                 </div>
                 <h3 className="mt-3 font-heading text-xl font-black leading-tight">
                   {selectedMaterial.title}
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6">
-                  {selectedMaterialIndexed
-                    ? "This material is ready for source-grounded answers."
-                    : "Create source chunks before asking questions from this material."}
+                  {selectedMaterialPrepared
+                    ? `Ready to chat. Prepared from ${selectedMaterial.chunk_count} sections.`
+                    : "Prepare this material before asking questions."}
                 </p>
-                {!selectedMaterialIndexed ? (
+                {!selectedMaterialPrepared ? (
                   <Button
                     className="mt-4 w-full"
-                    disabled={indexingMaterialId === selectedMaterial.id}
-                    onClick={handleIndexMaterial}
+                    disabled={preparingMaterialId === selectedMaterial.id}
+                    onClick={handlePrepareMaterial}
                     type="button"
                     variant="highlight"
                   >
-                    {indexingMaterialId === selectedMaterial.id
-                      ? "Indexing material..."
-                      : "Index material for chat"}
+                    {preparingMaterialId === selectedMaterial.id
+                      ? "Preparing your material…"
+                      : "Prepare for chat"}
                   </Button>
                 ) : null}
               </div>
             ) : null}
 
+            {/* All materials status */}
+            {isAllMaterials ? (
+              <div className="rounded-xl border-2 border-black bg-paper-base p-4 shadow-brutal-sm">
+                <Badge variant={preparedMaterials.length > 0 ? "success" : "yellow"}>
+                  {preparedMaterials.length > 0
+                    ? `${preparedMaterials.length} materials ready`
+                    : "No materials prepared yet"}
+                </Badge>
+                <p className="mt-3 text-sm font-semibold leading-6">
+                  {preparedMaterials.length > 0
+                    ? "Your question will search across all your prepared materials."
+                    : "Prepare at least one material before chatting."}
+                </p>
+              </div>
+            ) : null}
+
+            {/* Sessions */}
             <div className="grid gap-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="font-heading text-xl font-black">Sessions</h3>
+                <h3 className="font-heading text-xl font-black">Chats</h3>
                 <Button
-                  disabled={!selectedMaterial || creatingSession || Boolean(loadingSessionId)}
-                  onClick={() => {
-                    void handleCreateSession();
-                  }}
+                  disabled={
+                    (!isAllMaterials && !selectedMaterial) ||
+                    creatingSession ||
+                    Boolean(loadingSessionId)
+                  }
+                  onClick={() => { void handleCreateSession(); }}
                   size="sm"
                   type="button"
                   variant="secondary"
                 >
-                  {creatingSession ? "Starting..." : "New chat"}
+                  {creatingSession ? "Starting…" : "New chat"}
                 </Button>
               </div>
 
               {selectedMaterialSessions.length === 0 ? (
                 <div className="rounded-lg border-2 border-dashed border-black bg-paper-base p-4 text-sm font-black leading-6 shadow-brutal-sm">
-                  No sessions for this material yet. Start a new chat to keep questions grouped.
+                  No chats yet. Start a new one to keep your questions grouped.
                 </div>
               ) : (
-                <div className="grid gap-2" aria-label="Chat sessions">
+                <div aria-label="Chat sessions" className="grid gap-2">
                   {selectedMaterialSessions.map((session) => {
                     const active = session.id === selectedSessionId;
+                    const isRenaming = renamingSessionId === session.id;
+                    const isDeleting = deletingSessionId === session.id;
+
                     return (
-                      <button
-                        aria-current={active ? "true" : undefined}
+                      <div
                         className={cn(
-                          "min-h-11 rounded-md border-2 border-black px-3 py-2 text-left text-sm font-black shadow-brutal-sm transition hover:bg-accent-yellow",
+                          "rounded-md border-2 border-black shadow-brutal-sm",
                           active ? "bg-accent-yellow" : "bg-paper-base",
                         )}
                         key={session.id}
-                        onClick={() => {
-                          void handleSelectSession(session.id);
-                        }}
-                        type="button"
                       >
-                        <span className="flex min-w-0 items-center justify-between gap-2">
-                          <span className="truncate">{session.title}</span>
-                          {active ? (
-                            <span className="shrink-0 rounded-sm border-2 border-black bg-paper-base px-2 py-0.5 text-[10px] uppercase">
-                              Current
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
+                        {isRenaming ? (
+                          <div className="flex items-center gap-1 p-2">
+                            <input
+                              className="min-w-0 flex-1 rounded border-2 border-black bg-paper-base px-2 py-1 text-sm font-black focus:outline-none"
+                              maxLength={80}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") void commitRename(session.id);
+                                if (e.key === "Escape") cancelRename();
+                              }}
+                              ref={renameInputRef}
+                              type="text"
+                              value={renameValue}
+                            />
+                            <button
+                              className="shrink-0 rounded border-2 border-black bg-accent-blue px-2 py-1 text-xs font-black"
+                              disabled={renamePending}
+                              onClick={() => void commitRename(session.id)}
+                              type="button"
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="shrink-0 rounded border-2 border-black bg-paper-base px-2 py-1 text-xs font-black"
+                              onClick={cancelRename}
+                              type="button"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              aria-current={active ? "true" : undefined}
+                              className="min-h-11 w-full px-3 py-2 text-left text-sm font-black transition hover:bg-accent-yellow"
+                              onClick={() => { void handleSelectSession(session.id); }}
+                              type="button"
+                            >
+                              <span className="flex min-w-0 items-center justify-between gap-2">
+                                <span className="truncate">{session.title}</span>
+                                {active ? (
+                                  <span className="shrink-0 rounded-sm border-2 border-black bg-paper-base px-2 py-0.5 text-[10px] uppercase">
+                                    Open
+                                  </span>
+                                ) : null}
+                              </span>
+                            </button>
+                            <div className="flex gap-1 border-t-2 border-black px-2 py-1">
+                              <button
+                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-accent-yellow"
+                                onClick={() => startRename(session)}
+                                type="button"
+                              >
+                                Rename
+                              </button>
+                              <button
+                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-accent-pink"
+                                disabled={isDeleting}
+                                onClick={() => { void handleDeleteSession(session.id); }}
+                                type="button"
+                              >
+                                {isDeleting ? "Deleting…" : "Delete"}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -554,86 +865,94 @@ export function RagChatSection({
             </div>
           </aside>
 
+          {/* ── Main chat area ── */}
           <div className="grid min-h-[560px] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 bg-paper-base p-4 sm:p-5">
+
+            {/* Header */}
             <div className="rounded-xl border-2 border-black bg-accent-blue p-4 shadow-brutal-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase text-zinc-600">
-                    Study answer desk
+                    Study desk
                   </p>
                   <h3 className="mt-1 break-words font-heading text-2xl font-black leading-tight">
-                    {selectedMaterial?.title ?? "Choose a material"}
+                    {isAllMaterials
+                      ? "All prepared materials"
+                      : (selectedMaterial?.title ?? "Choose a material")}
                   </h3>
                 </div>
-                <Badge variant={selectedMaterialIndexed ? "success" : "yellow"}>
-                  {selectedMaterialIndexed ? "Ready" : "Index needed"}
+                <Badge variant={selectedMaterialPrepared ? "success" : "yellow"}>
+                  {selectedMaterialPrepared ? "Ready to chat" : "Not prepared"}
                 </Badge>
               </div>
             </div>
 
+            {/* Messages */}
             <div className="min-h-0 overflow-y-auto rounded-xl border-2 border-black bg-paper-muted p-3 shadow-brutal-sm sm:p-4">
               {loadingSessionId ? (
                 <div className="rounded-lg border-2 border-black bg-paper-base p-4 text-sm font-black shadow-brutal-sm">
-                  Loading messages...
+                  Loading your chat…
                 </div>
               ) : !selectedSessionId ? (
                 <EmptyState
                   accent="blue"
                   className="shadow-none"
-                  description="Create or select a session to preserve the questions and grounded answers for this material."
-                  title="No chat session selected"
+                  description="Create or select a chat to keep your questions and answers in one place."
+                  title="No chat selected"
                 />
               ) : messages.length === 0 ? (
                 <EmptyState
                   accent="blue"
                   className="shadow-none"
-                  description="Ask a focused question. Answers will use retrieved chunks from the selected material only."
-                  title="No messages yet"
+                  description="Ask a question below. Answers will come straight from your notes."
+                  title="Ready for your first question"
                 />
               ) : (
                 <div className="grid gap-4">
-                  {messages.map((message) => (
+                  {messages.map((msg) => (
                     <MessageCard
-                      key={message.id}
-                      message={message}
-                      sources={sourcesByMessageId[message.id] ?? []}
+                      key={msg.id}
+                      loadingSources={loadingSourcesForMessageId === msg.id}
+                      materials={materialRows}
+                      message={msg}
+                      sources={sourcesByMessageId[msg.id] ?? []}
                     />
                   ))}
                   {asking ? (
                     <div className="rounded-xl border-2 border-black bg-accent-yellow p-4 text-sm font-black shadow-brutal-sm">
-                      Searching your material and drafting a grounded answer...
+                      Searching your notes and writing an answer…
                     </div>
                   ) : null}
                 </div>
               )}
             </div>
 
+            {/* Input form */}
             <form className="grid gap-3" onSubmit={handleSubmitQuestion}>
               <Textarea
-                disabled={!selectedMaterialIndexed || asking || !selectedMaterial}
+                disabled={!selectedMaterialPrepared || asking}
                 id="rag-question"
-                label="Ask from this material"
+                label="Make material easy here"
                 maxLength={2000}
-                onChange={(event) => setQuestion(event.target.value)}
-                placeholder="Example: What are the main steps in this topic?"
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask anything from your notes…"
                 value={question}
               />
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold leading-6 text-zinc-700">
-                  Answers use retrieved chunks only. Source cards appear when the answer is supported.
+                  Answers come only from your own material. Source sections appear below each answer.
                 </p>
                 <Button
                   className="w-full sm:w-auto"
                   disabled={
-                    !selectedMaterialIndexed ||
-                    !selectedMaterial ||
+                    !selectedMaterialPrepared ||
                     asking ||
-                    indexingMaterialId !== null
+                    preparingMaterialId !== null
                   }
                   type="submit"
                   variant="primary"
                 >
-                  {asking ? "Searching notes..." : "Ask notes"}
+                  {asking ? "Searching notes…" : "Ask my notes"}
                 </Button>
               </div>
             </form>

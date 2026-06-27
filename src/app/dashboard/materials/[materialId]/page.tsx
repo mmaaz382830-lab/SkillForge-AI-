@@ -147,9 +147,6 @@ function FutureActions({ material }: { material: MaterialDetail }) {
             Chat after processing
           </Button>
         )}
-        <Button aria-disabled="true" size="sm" type="button" variant="highlight">
-          Generate study assets - Day 6
-        </Button>
       </div>
     </section>
   );

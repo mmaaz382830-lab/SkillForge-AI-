@@ -113,9 +113,6 @@ export function MaterialCard({ material }: MaterialCardProps) {
             Chat after processing
           </Button>
         )}
-        <Button aria-disabled="true" size="sm" type="button" variant="highlight">
-          Generate Day 6
-        </Button>
         <DeleteMaterialButton
           materialId={material.id}
           materialTitle={material.title}
