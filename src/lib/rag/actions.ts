@@ -36,7 +36,6 @@ import {
   getChunksByIds,
   renameChatSession,
   type ChatMessage,
-  type ChatMessageRole,
   type ChatMessageView,
   type ChatSessionListItem,
 } from "./queries";
@@ -358,6 +357,10 @@ function logRagAnswerError(input: {
   userId?: string;
   error?: unknown;
 }) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
   const error = getErrorObject(input.error);
 
   console.error("[rag:answer:error]", {
@@ -371,6 +374,23 @@ function logRagAnswerError(input: {
   });
 }
 
+function logRagRetrievalDiagnostic(input: {
+  mode: "all" | "material";
+  materialId?: string | null;
+  requestedCount?: number | null;
+  chunkCount: number;
+}) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  console.info("[rag:retrieval]", {
+    mode: input.mode,
+    materialId: input.materialId ?? null,
+    requestedCount: input.requestedCount ?? null,
+    chunkCount: input.chunkCount,
+  });
+}
 function normalizeTopK(topK: number | undefined): number | undefined {
   if (topK === undefined) {
     return undefined;
@@ -471,7 +491,14 @@ export async function answerQuestionFromMaterial(
     const chunks = await retrieveMaterialChunks({
       question,
       materialId,
-      topK: requestedCount,
+      topK: requestedCount ?? 12,
+    });
+
+    logRagRetrievalDiagnostic({
+      mode: "material",
+      materialId,
+      requestedCount: requestedCount ?? 12,
+      chunkCount: chunks.length,
     });
 
     if (chunks.length === 0) {
@@ -559,7 +586,7 @@ export async function answerQuestionFromMaterial(
 /**
  * All-materials mode: retrieve chunks across every material the user owns
  * (filter_material_id = null in the RPC). Security is enforced server-side
- * by auth.uid() inside match_material_chunks. topK is raised to 12 for
+ * by auth.uid() inside match_material_chunks. topK is raised to 16 for
  * broad overview questions.
  */
 async function answerQuestionAllMaterials(input: {
@@ -579,8 +606,15 @@ async function answerQuestionAllMaterials(input: {
 
     const chunks = await retrieveMaterialChunks({
       question,
-      materialId: null, // null → RPC returns all user's chunks
-      topK: input.topK,
+      materialId: null,
+      topK: input.topK ?? 16,
+    });
+
+    logRagRetrievalDiagnostic({
+      mode: "all",
+      materialId: null,
+      requestedCount: input.topK ?? 16,
+      chunkCount: chunks.length,
     });
 
     if (chunks.length === 0) {
@@ -745,36 +779,66 @@ async function touchChatSession(input: {
   };
 }
 
-async function saveChatMessage(input: {
+async function saveChatMessagePair(input: {
   sessionId: string;
   userId: string;
-  role: ChatMessageRole;
-  content: string;
+  question: string;
+  answer: string;
   sourceChunkIds?: string[] | null;
-  metadata?: ChatMessageMetadata;
-}): Promise<MaterialActionResult<SavedChatMessage>> {
+  userMetadata?: ChatMessageMetadata;
+  assistantMetadata?: ChatMessageMetadata;
+}): Promise<MaterialActionResult<{ userMessage: SavedChatMessage; assistantMessage: SavedChatMessage }>> {
   const supabase = await createSupabaseServerClient();
+  const now = Date.now();
   const { data, error } = await supabase
     .from("chat_messages")
-    .insert({
-      chat_session_id: input.sessionId,
-      user_id: input.userId,
-      role: input.role,
-      content: input.content,
-      source_chunk_ids: input.sourceChunkIds ?? null,
-      metadata: input.metadata ?? {},
-    })
+    .insert([
+      {
+        chat_session_id: input.sessionId,
+        user_id: input.userId,
+        role: "user",
+        content: input.question,
+        source_chunk_ids: null,
+        metadata: input.userMetadata ?? {},
+        created_at: new Date(now).toISOString(),
+      },
+      {
+        chat_session_id: input.sessionId,
+        user_id: input.userId,
+        role: "assistant",
+        content: input.answer,
+        source_chunk_ids: input.sourceChunkIds ?? null,
+        metadata: input.assistantMetadata ?? {},
+        created_at: new Date(now + 1).toISOString(),
+      },
+    ])
     .select(
       "id,chat_session_id,role,content,source_chunk_ids,metadata,created_at",
     )
-    .maybeSingle<SavedChatMessage>();
+    .returns<SavedChatMessage[]>();
 
-  if (error || !data) {
+  if (error || !data || data.length !== 2) {
     logChatPersistenceError({
       step: "save-message",
       sessionId: input.sessionId,
       userId: input.userId,
       error,
+    });
+    return {
+      ok: false,
+      error: "Could not save chat message.",
+    };
+  }
+
+  const userMessage = data.find((message) => message.role === "user");
+  const assistantMessage = data.find((message) => message.role === "assistant");
+
+  if (!userMessage || !assistantMessage) {
+    logChatPersistenceError({
+      step: "save-message",
+      sessionId: input.sessionId,
+      userId: input.userId,
+      error: new Error("Inserted chat message pair was incomplete."),
     });
     return {
       ok: false,
@@ -793,10 +857,9 @@ async function saveChatMessage(input: {
 
   return {
     ok: true,
-    data,
+    data: { userMessage, assistantMessage },
   };
 }
-
 export async function createChatSession(
   input: CreateChatSessionInput,
 ): Promise<MaterialActionResult<ChatSessionListItem>> {
@@ -927,7 +990,7 @@ export async function askRagChatQuestion(
   const isAllMaterials = !rawMaterialId;
   const question = input.question.trim();
   // Raise topK for broad all-materials queries (capped by normalizeTopK at 20)
-  const topK = normalizeTopK(input.topK ?? (isAllMaterials ? 12 : undefined));
+  const topK = normalizeTopK(input.topK ?? (isAllMaterials ? 16 : 12));
 
   if (!sessionId) {
     return { ok: false, error: "Chat session not found." };
@@ -994,17 +1057,6 @@ export async function askRagChatQuestion(
     }
   }
 
-  const userMessage = await saveChatMessage({
-    sessionId,
-    userId: user.data,
-    role: "user",
-    content: question,
-    metadata: { material_id: rawMaterialId ?? "__all__" },
-  });
-
-  if (!userMessage.ok) return userMessage;
-
-  // Route to the right retrieval strategy
   const answer = isAllMaterials
     ? await answerQuestionAllMaterials({ question, topK, userId: user.data })
     : await answerQuestionFromMaterial({ materialId: rawMaterialId!, question, topK });
@@ -1017,35 +1069,24 @@ export async function askRagChatQuestion(
       userId: user.data,
       error: new Error(answer.error),
     });
-    // Save a clean assistant error message linked to that question so we don't leave a dangling question
-    await saveChatMessage({
-      sessionId,
-      userId: user.data,
-      role: "assistant",
-      content: answer.error || "AI service is temporarily unavailable. Please try again later.",
-      metadata: {
-        material_id: rawMaterialId ?? "__all__",
-        error: true,
-      },
-    });
     return answer;
   }
 
-  const assistantMessage = await saveChatMessage({
+  const savedMessages = await saveChatMessagePair({
     sessionId,
     userId: user.data,
-    role: "assistant",
-    content: answer.data.answer,
+    question,
+    answer: answer.data.answer,
     sourceChunkIds: answer.data.source_chunk_ids,
-    metadata: {
+    userMetadata: { material_id: rawMaterialId ?? "__all__" },
+    assistantMetadata: {
       material_id: rawMaterialId ?? "__all__",
       insufficient_context: answer.data.insufficient_context,
       source_count: answer.data.sources.length,
     },
   });
 
-  if (!assistantMessage.ok) return assistantMessage;
-
+  if (!savedMessages.ok) return savedMessages;
   revalidateChatViews(rawMaterialId);
 
   return {
@@ -1053,8 +1094,8 @@ export async function askRagChatQuestion(
     data: {
       ...answer.data,
       session_id: sessionId,
-      user_message_id: userMessage.data.id,
-      assistant_message_id: assistantMessage.data.id,
+      user_message_id: savedMessages.data.userMessage.id,
+      assistant_message_id: savedMessages.data.assistantMessage.id,
     },
   };
 }

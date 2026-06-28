@@ -218,6 +218,7 @@ export function RagChatSection({
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const askingRef = useRef(false);
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -414,8 +415,7 @@ export function RagChatSection({
       return;
     }
 
-    const remaining = sessionRows.filter((s) => s.id !== sessionId);
-    setSessionRows(remaining);
+    setSessionRows((rows) => rows.filter((session) => session.id !== sessionId));
 
     if (selectedSessionId === sessionId) {
       setSelectedSessionId("");
@@ -431,7 +431,7 @@ export function RagChatSection({
   async function handleSubmitQuestion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (asking) return;
+    if (asking || askingRef.current) return;
 
     if (!isAllMaterials && !selectedMaterial) {
       setFeedback({ variant: "error", title: "Select a material first." });
@@ -455,6 +455,7 @@ export function RagChatSection({
     }
 
     setFeedback(null);
+    askingRef.current = true;
     setAsking(true);
 
     let activeSessionId = selectedSessionId;
@@ -465,6 +466,7 @@ export function RagChatSection({
     }
 
     if (!activeSessionId) {
+      askingRef.current = false;
       setAsking(false);
       return;
     }
@@ -477,6 +479,7 @@ export function RagChatSection({
 
     if (!isAllMaterials && !effectiveMaterialId) {
       setFeedback({ variant: "error", title: "No prepared material available." });
+      askingRef.current = false;
       setAsking(false);
       return;
     }
@@ -487,6 +490,7 @@ export function RagChatSection({
       question: trimmedQuestion,
     });
 
+    askingRef.current = false;
     setAsking(false);
 
     if (!result.ok) {
@@ -667,7 +671,7 @@ export function RagChatSection({
                     return (
                       <div
                         className={cn(
-                          "rounded-md border-2 border-black p-2.5 shadow-brutal-sm transition",
+                          "rounded-lg border-2 border-black p-3 shadow-brutal-sm transition",
                           active ? "bg-accent-yellow" : "bg-paper-base hover:bg-accent-yellow/30",
                         )}
                         key={session.id}
@@ -703,39 +707,40 @@ export function RagChatSection({
                             </button>
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-1.5">
+                          <div className="grid gap-2">
                             <button
                               aria-current={active ? "true" : undefined}
-                              className="w-full text-left focus:outline-none cursor-pointer"
+                              className="min-w-0 rounded-md border border-transparent p-1 text-left transition hover:border-black hover:bg-paper-muted focus:outline-none focus-visible:border-black"
                               onClick={() => { void handleSelectSession(session.id); }}
                               type="button"
                             >
-                              <div className="flex items-center justify-between gap-2 min-w-0">
-                                <span className="text-sm font-black truncate flex-1 min-w-0">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="min-w-0 flex-1 truncate text-sm font-black leading-tight">
                                   {session.title}
                                 </span>
                                 {active ? (
-                                  <span className="shrink-0 rounded-sm border border-black bg-black px-1.5 py-0.5 text-[9px] uppercase font-black text-white">
+                                  <span className="shrink-0 rounded-sm border border-black bg-black px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
                                     Open
                                   </span>
                                 ) : null}
                               </div>
                             </button>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2 pl-1">
                               <button
-                                className="rounded border border-black bg-paper-base px-1.5 py-0.5 text-[10px] font-black text-zinc-700 transition hover:bg-accent-blue hover:text-white cursor-pointer"
+                                className="rounded border border-black bg-paper-base px-2 py-1 text-[10px] font-black text-zinc-700 transition hover:bg-accent-blue hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={isDeleting}
                                 onClick={() => startRename(session)}
                                 type="button"
                               >
                                 Rename
                               </button>
                               <button
-                                className="rounded border border-black bg-paper-base px-1.5 py-0.5 text-[10px] font-black text-red-600 transition hover:bg-red-600 hover:text-white cursor-pointer"
+                                className="rounded border border-black bg-paper-base px-2 py-1 text-[10px] font-black text-red-700 transition hover:bg-state-error hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                                 disabled={isDeleting}
                                 onClick={() => { void handleDeleteSession(session.id); }}
                                 type="button"
                               >
-                                {isDeleting ? "Deleting…" : "Delete"}
+                                {isDeleting ? "Deleting..." : "Delete"}
                               </button>
                             </div>
                           </div>
@@ -815,6 +820,11 @@ export function RagChatSection({
                 label="Make material easy here"
                 maxLength={2000}
                 onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (askingRef.current && e.key === "Enter") {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="Ask anything from your notes…"
                 value={question}
               />

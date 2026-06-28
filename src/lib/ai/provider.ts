@@ -23,6 +23,7 @@ export {
 type GenerateTextOptions = {
   model?: string;
   temperature?: number;
+  responseMimeType?: "application/json" | "text/plain";
 };
 
 export type GeminiTextGeneration = {
@@ -79,7 +80,7 @@ export async function generateTextWithGemini(
       contents: prompt,
       config: {
         temperature,
-        responseMimeType: "application/json",
+        responseMimeType: options.responseMimeType ?? "application/json",
       },
     });
     const text = response.text?.trim();
