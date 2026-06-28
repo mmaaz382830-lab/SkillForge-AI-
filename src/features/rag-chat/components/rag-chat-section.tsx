@@ -14,7 +14,6 @@ import {
   createChatSession,
   indexMaterialForRag,
   loadChatSessionMessages,
-  loadSourceSnippetsForMessage,
   renameChatSessionAction,
   softDeleteChatSession,
 } from "@/lib/rag/actions";
@@ -82,7 +81,7 @@ function sortSessions(sessions: ChatSessionListItem[]): ChatSessionListItem[] {
   );
 }
 
-// ─── SourceCards ─────────────────────────────────────────────────────────────
+// ─── SourceCards (hidden by default — collapsed toggle) ──────────────────────
 
 function SourceCards({
   sources,
@@ -91,7 +90,8 @@ function SourceCards({
   sources: SourceSnippet[];
   materials: RagChatMaterial[];
 }) {
-  const visible = sources.slice(0, 4);
+  const [open, setOpen] = useState(false);
+  const visible = sources.slice(0, 6);
 
   if (visible.length === 0) return null;
 
@@ -100,33 +100,32 @@ function SourceCards({
   }
 
   return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      {visible.map((source) => {
-        const matTitle = getMaterialTitle(source.material_id);
-        return (
-          <article
-            className="rounded-lg border-2 border-black bg-paper-base p-3 text-sm shadow-brutal-sm"
-            key={source.chunk_id}
-          >
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <Badge variant="blue">Section {source.chunk_index + 1}</Badge>
-              {source.similarity > 0 ? (
-                <span className="text-xs font-black text-zinc-600">
-                  Relevance {Math.round(source.similarity * 100)}%
-                </span>
-              ) : null}
-            </div>
-            {matTitle ? (
-              <p className="mb-1 truncate text-xs font-black text-zinc-500">{matTitle}</p>
-            ) : null}
-            <p className="font-semibold leading-6">{source.snippet}</p>
-          </article>
-        );
-      })}
-      {sources.length > visible.length ? (
-        <p className="rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6">
-          {sources.length - visible.length} more sections also supported this answer.
-        </p>
+    <div className="mt-3">
+      <button
+        className="text-xs font-black text-zinc-500 underline-offset-2 hover:underline focus:outline-none"
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        {open ? "Hide sources ▲" : "Show where this came from ▼"}
+      </button>
+
+      {open ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {visible.map((source) => {
+            const matTitle = getMaterialTitle(source.material_id);
+            return (
+              <article
+                className="rounded-lg border-2 border-black bg-paper-base p-3 text-sm shadow-brutal-sm"
+                key={source.chunk_id}
+              >
+                {matTitle ? (
+                  <p className="mb-1 truncate text-xs font-black text-zinc-500">{matTitle}</p>
+                ) : null}
+                <p className="font-semibold leading-6">{source.snippet}</p>
+              </article>
+            );
+          })}
+        </div>
       ) : null}
     </div>
   );
@@ -138,16 +137,13 @@ function MessageCard({
   message,
   sources,
   materials,
-  loadingSources,
 }: {
   message: ChatMessageView;
   sources: SourceSnippet[];
   materials: RagChatMaterial[];
-  loadingSources?: boolean;
 }) {
   const isAssistant = message.role === "assistant";
   const insufficient = isAssistant && getMessageInsufficientContext(message);
-  const savedCount = message.source_chunk_ids?.length ?? 0;
 
   // Render answer with basic markdown: ## headings and - bullet lists
   function renderAnswer(text: string) {
@@ -217,7 +213,7 @@ function MessageCard({
       )}
 
       {isAssistant && !insufficient ? (
-        <p className="mt-3 text-xs font-black uppercase tracking-wide text-zinc-600">
+        <p className="mt-3 text-xs font-black uppercase tracking-wide text-zinc-500">
           ✓ Answer generated from your material
         </p>
       ) : null}
@@ -229,21 +225,8 @@ function MessageCard({
         </p>
       ) : null}
 
-      {isAssistant ? (
+      {isAssistant && sources.length > 0 ? (
         <SourceCards sources={sources} materials={materials} />
-      ) : null}
-
-      {isAssistant && sources.length === 0 && savedCount > 0 ? (
-        loadingSources ? (
-          <p className="mt-4 rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6">
-            Loading source sections…
-          </p>
-        ) : (
-          <p className="mt-4 rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6">
-            Source sections were saved with this answer.{" "}
-            <span className="text-zinc-500">(Prepared from {savedCount} sections)</span>
-          </p>
-        )
       ) : null}
     </article>
   );
@@ -273,9 +256,7 @@ export function RagChatSection({
   const [sourcesByMessageId, setSourcesByMessageId] = useState<
     Record<string, SourceSnippet[]>
   >({});
-  const [loadingSourcesForMessageId, setLoadingSourcesForMessageId] = useState<string | null>(
-    null,
-  );
+
   const [question, setQuestion] = useState("");
   const [feedback, setFeedback] = useState<Feedback | null>(
     initialNotice ? { title: initialNotice, variant: "warning" } : null,
@@ -339,39 +320,11 @@ export function RagChatSection({
     setSourcesByMessageId({});
   }
 
-  // ── Load historical source snippets for old messages ──────────────────────
-
-  async function loadHistoricalSources(
-    loadedMessages: ChatMessageView[],
-    sessionId: string,
-  ) {
-    for (const msg of loadedMessages) {
-      if (
-        msg.role === "assistant" &&
-        msg.source_chunk_ids &&
-        msg.source_chunk_ids.length > 0
-      ) {
-        setLoadingSourcesForMessageId(msg.id);
-        const result = await loadSourceSnippetsForMessage({
-          sessionId,
-          chunkIds: msg.source_chunk_ids,
-        });
-        setLoadingSourcesForMessageId(null);
-
-        if (result.ok && result.data.length > 0) {
-          setSourcesByMessageId((prev) => ({
-            ...prev,
-            [msg.id]: result.data.map((c) => ({
-              chunk_id: c.id,
-              material_id: c.material_id,
-              chunk_index: c.chunk_index,
-              snippet: c.snippet,
-              similarity: c.similarity,
-            })),
-          }));
-        }
-      }
-    }
+  // Source chunk IDs are kept in DB for grounding integrity.
+  // Snippets are not fetched for display (hidden from normal users).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function loadHistoricalSources(..._args: unknown[]) {
+    // intentionally empty — source_chunk_ids remain stored in DB
   }
 
   // ── Session actions ────────────────────────────────────────────────────────
@@ -666,10 +619,10 @@ export function RagChatSection({
   return (
     <section aria-labelledby="chat-heading" className="grid gap-5">
       <div className="brutal-card overflow-hidden">
-        <div className="grid gap-0 xl:grid-cols-[minmax(280px,0.42fr)_minmax(0,1fr)]">
+        <div className="grid items-start gap-0 xl:grid-cols-[minmax(280px,0.42fr)_minmax(0,1fr)]">
 
           {/* ── Sidebar ── */}
-          <aside className="grid gap-5 border-b-2 border-black bg-paper-muted p-4 sm:p-5 xl:border-b-0 xl:border-r-2">
+          <aside className="grid gap-4 self-start border-b-2 border-black bg-paper-muted p-4 sm:p-5 xl:sticky xl:top-0 xl:border-b-0 xl:border-r-2">
             <div>
               <p className="text-xs font-black uppercase text-zinc-500">
                 Learn from your notes
@@ -702,7 +655,7 @@ export function RagChatSection({
 
             {/* Material status card */}
             {!isAllMaterials && selectedMaterial ? (
-              <div className="rounded-xl border-2 border-black bg-paper-base p-4 shadow-brutal-sm">
+              <div className="rounded-xl border-2 border-black bg-paper-base p-3 shadow-brutal-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="blue">{getMaterialTypeLabel(selectedMaterial.type)}</Badge>
                   <Badge
@@ -713,41 +666,41 @@ export function RagChatSection({
                       : "Needs preparation"}
                   </Badge>
                 </div>
-                <h3 className="mt-3 font-heading text-xl font-black leading-tight">
+                <p className="mt-2 truncate text-sm font-black leading-tight">
                   {selectedMaterial.title}
-                </h3>
-                <p className="mt-2 text-sm font-semibold leading-6">
-                  {selectedMaterialPrepared
-                    ? `Ready to chat. Prepared from ${selectedMaterial.chunk_count} sections.`
-                    : "Prepare this material before asking questions."}
                 </p>
                 {!selectedMaterialPrepared ? (
-                  <Button
-                    className="mt-4 w-full"
-                    disabled={preparingMaterialId === selectedMaterial.id}
-                    onClick={handlePrepareMaterial}
-                    type="button"
-                    variant="highlight"
-                  >
-                    {preparingMaterialId === selectedMaterial.id
-                      ? "Preparing your material…"
-                      : "Prepare for chat"}
-                  </Button>
+                  <>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-zinc-600">
+                      Prepare this material before asking questions.
+                    </p>
+                    <Button
+                      className="mt-3 w-full"
+                      disabled={preparingMaterialId === selectedMaterial.id}
+                      onClick={handlePrepareMaterial}
+                      type="button"
+                      variant="highlight"
+                    >
+                      {preparingMaterialId === selectedMaterial.id
+                        ? "Preparing…"
+                        : "Prepare for chat"}
+                    </Button>
+                  </>
                 ) : null}
               </div>
             ) : null}
 
             {/* All materials status */}
             {isAllMaterials ? (
-              <div className="rounded-xl border-2 border-black bg-paper-base p-4 shadow-brutal-sm">
+              <div className="rounded-xl border-2 border-black bg-paper-base p-3 shadow-brutal-sm">
                 <Badge variant={preparedMaterials.length > 0 ? "success" : "yellow"}>
                   {preparedMaterials.length > 0
                     ? `${preparedMaterials.length} materials ready`
                     : "No materials prepared yet"}
                 </Badge>
-                <p className="mt-3 text-sm font-semibold leading-6">
+                <p className="mt-2 text-xs font-semibold leading-5 text-zinc-600">
                   {preparedMaterials.length > 0
-                    ? "Your question will search across all your prepared materials."
+                    ? "Searches across all your prepared materials."
                     : "Prepare at least one material before chatting."}
                 </p>
               </div>
@@ -773,11 +726,11 @@ export function RagChatSection({
               </div>
 
               {selectedMaterialSessions.length === 0 ? (
-                <div className="rounded-lg border-2 border-dashed border-black bg-paper-base p-4 text-sm font-black leading-6 shadow-brutal-sm">
+                <div className="rounded-lg border-2 border-dashed border-black bg-paper-base p-3 text-sm font-black leading-6 shadow-brutal-sm">
                   No chats yet. Start a new one to keep your questions grouped.
                 </div>
               ) : (
-                <div aria-label="Chat sessions" className="grid gap-2">
+                <div aria-label="Chat sessions" className="grid max-h-64 gap-2 overflow-y-auto">
                   {selectedMaterialSessions.map((session) => {
                     const active = session.id === selectedSessionId;
                     const isRenaming = renamingSessionId === session.id;
@@ -912,7 +865,6 @@ export function RagChatSection({
                   {messages.map((msg) => (
                     <MessageCard
                       key={msg.id}
-                      loadingSources={loadingSourcesForMessageId === msg.id}
                       materials={materialRows}
                       message={msg}
                       sources={sourcesByMessageId[msg.id] ?? []}
@@ -940,7 +892,7 @@ export function RagChatSection({
               />
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold leading-6 text-zinc-700">
-                  Answers come only from your own material. Source sections appear below each answer.
+                  Answers come only from your own material.
                 </p>
                 <Button
                   className="w-full sm:w-auto"
