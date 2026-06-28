@@ -942,15 +942,6 @@ export async function softDeleteChatSession(
     return user;
   }
 
-  const session = await getOwnedChatSession({
-    sessionId: id,
-    userId: user.data,
-  });
-
-  if (!session.ok) {
-    return session;
-  }
-
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("chat_sessions")
@@ -963,7 +954,6 @@ export async function softDeleteChatSession(
     logChatPersistenceError({
       step: "soft-delete",
       sessionId: id,
-      materialId: session.data.material_id ?? undefined,
       userId: user.data,
       error,
     });
@@ -973,7 +963,7 @@ export async function softDeleteChatSession(
     };
   }
 
-  revalidateChatViews(session.data.material_id);
+  revalidateChatViews();
 
   return {
     ok: true,

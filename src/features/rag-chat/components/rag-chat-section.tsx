@@ -728,7 +728,7 @@ export function RagChatSection({
                             <div className="flex items-center gap-2 pl-1">
                               <button
                                 className="rounded border border-black bg-paper-base px-2 py-1 text-[10px] font-black text-zinc-700 transition hover:bg-accent-blue hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
-                                disabled={isDeleting}
+                                disabled={isDeleting || Boolean(deletingSessionId)}
                                 onClick={() => startRename(session)}
                                 type="button"
                               >
@@ -736,7 +736,7 @@ export function RagChatSection({
                               </button>
                               <button
                                 className="rounded border border-black bg-paper-base px-2 py-1 text-[10px] font-black text-red-700 transition hover:bg-state-error hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                disabled={isDeleting}
+                                disabled={isDeleting || Boolean(deletingSessionId)}
                                 onClick={() => { void handleDeleteSession(session.id); }}
                                 type="button"
                               >
