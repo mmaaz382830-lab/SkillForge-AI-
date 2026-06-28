@@ -106,16 +106,55 @@ CONTENT RULES:
 - Return valid JSON only. Do not include markdown fences or prose outside JSON.
 
 INSUFFICIENT CONTEXT RULE:
-- Set insufficient_context to true ONLY when the retrieved sections contain NO relevant information at all and you cannot give any useful answer.
-- For broad overview questions ("describe all pdfs", "summarize materials", "what are these notes about"), answer using whatever relevant content IS present in the sections — do NOT mark as insufficient just because coverage is partial.
-- For definition questions ("what is RAG", "what is backend"), if the retrieved sections contain any definition or description, answer from it.
-- When in doubt and you have ANY useful context, set insufficient_context to false and give the best answer you can.
+- Set insufficient_context to true ONLY when the retrieved sections contain absolutely no relevant information at all, have zero connection to the query, and it is completely impossible to formulate any response.
+- If the retrieved sections contain relevant keywords, terms, or context, you MUST synthesize an answer using that context and set insufficient_context to false.
+- For broad overview questions (e.g., "describe all pdfs", "summarize materials", "explain important topics", "what is backend in this PDF"), answer using whatever content or topics are present in the sections. Do not set insufficient_context to true just because the explanation in the text is brief or partial.
+- If the material only contains a list of questions, terms, or a syllabus rather than full explanations, answer by stating what the material contains (e.g., "The material contains a list of study questions and topics on [x, y, z]") and list those items, instead of saying you have insufficient context.
+- When in doubt and you have ANY useful context (even just keywords or titles), set insufficient_context to false and give the best answer you can.
 
 Return JSON with this exact shape:
 {
   "answer": "Student-friendly answer using bullet points and short paragraphs, or the exact insufficient context message",
   "insufficient_context": false
 }`;
+}
+
+import { AiInvalidOutputError } from "@/lib/ai/errors";
+
+function parseOrFallbackGroundedAnswer(text: string): { answer: string; insufficient_context: boolean } {
+  const trimmed = text.trim();
+
+  // 1. Try to clean up and parse JSON if possible
+  try {
+    const cleanText = trimmed.replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, "$1").trim();
+    const start = cleanText.indexOf("{");
+    const end = cleanText.lastIndexOf("}");
+    if (start !== -1 && end !== -1 && end > start) {
+      const jsonCandidate = cleanText.slice(start, end + 1);
+      const parsed = JSON.parse(jsonCandidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const answer = typeof parsed.answer === "string" ? parsed.answer.trim() : "";
+        const insufficient = typeof parsed.insufficient_context === "boolean" ? parsed.insufficient_context : false;
+        if (answer) {
+          return { answer, insufficient_context: insufficient };
+        }
+      }
+    }
+  } catch {
+    // ignore, fallback below
+  }
+
+  // 2. Fallback: treat raw text as the answer.
+  const isInsufficient =
+    trimmed.toLowerCase().includes("insufficient context") ||
+    trimmed.toLowerCase().includes("not enough context") ||
+    trimmed.toLowerCase().includes("could not find enough context") ||
+    trimmed === RAG_INSUFFICIENT_CONTEXT_MESSAGE;
+
+  return {
+    answer: trimmed,
+    insufficient_context: isInsufficient,
+  };
 }
 
 export async function generateGroundedAnswer(input: {
@@ -137,28 +176,50 @@ export async function generateGroundedAnswer(input: {
     };
   }
 
-  const generation = await generateValidatedJson({
-    prompt: buildGroundedAnswerPrompt({ question, chunks }),
-    schema: groundedAnswerOutputSchema,
-    validationHint:
-      "Return { answer: string, insufficient_context: boolean }. If context is insufficient, answer must be the exact insufficient-context sentence.",
-    model: DEFAULT_GEMINI_TEXT_MODEL,
-    temperature: 0.1,
-  });
+  try {
+    const generation = await generateValidatedJson({
+      prompt: buildGroundedAnswerPrompt({ question, chunks }),
+      schema: groundedAnswerOutputSchema,
+      validationHint:
+        "Return { answer: string, insufficient_context: boolean }. If context is insufficient, answer must be the exact insufficient-context sentence.",
+      model: DEFAULT_GEMINI_TEXT_MODEL,
+      temperature: 0.1,
+    });
 
-  const insufficient = generation.data.insufficient_context;
-  const answer = insufficient
-    ? RAG_INSUFFICIENT_CONTEXT_MESSAGE
-    : generation.data.answer.trim();
-  const sourceChunkIds = insufficient ? [] : chunks.map((chunk) => chunk.id);
+    const insufficient = generation.data.insufficient_context;
+    const answer = insufficient
+      ? RAG_INSUFFICIENT_CONTEXT_MESSAGE
+      : generation.data.answer.trim();
+    const sourceChunkIds = insufficient ? [] : chunks.map((chunk) => chunk.id);
 
-  return {
-    answer,
-    insufficient_context: insufficient,
-    source_chunk_ids: sourceChunkIds,
-    sources: insufficient ? [] : buildSourceSnippets(chunks),
-    model: generation.model,
-    provider: generation.provider,
-    retry_count: generation.retryCount,
-  };
+    return {
+      answer,
+      insufficient_context: insufficient,
+      source_chunk_ids: sourceChunkIds,
+      sources: insufficient ? [] : buildSourceSnippets(chunks),
+      model: generation.model,
+      provider: generation.provider,
+      retry_count: generation.retryCount,
+    };
+  } catch (error) {
+    if (error instanceof AiInvalidOutputError && error.rawText) {
+      const fallbackResult = parseOrFallbackGroundedAnswer(error.rawText);
+      const insufficient = fallbackResult.insufficient_context;
+      const answer = insufficient
+        ? RAG_INSUFFICIENT_CONTEXT_MESSAGE
+        : fallbackResult.answer.trim();
+      const sourceChunkIds = insufficient ? [] : chunks.map((chunk) => chunk.id);
+
+      return {
+        answer,
+        insufficient_context: insufficient,
+        source_chunk_ids: sourceChunkIds,
+        sources: insufficient ? [] : buildSourceSnippets(chunks),
+        model: DEFAULT_GEMINI_TEXT_MODEL,
+        provider: "gemini",
+        retry_count: 1,
+      };
+    }
+    throw error;
+  }
 }

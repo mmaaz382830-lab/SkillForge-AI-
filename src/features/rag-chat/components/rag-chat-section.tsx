@@ -57,6 +57,15 @@ function getMessageInsufficientContext(message: ChatMessageView): boolean {
   );
 }
 
+function getMessageIsError(message: ChatMessageView): boolean {
+  return Boolean(
+    message.metadata &&
+      typeof message.metadata === "object" &&
+      "error" in message.metadata &&
+      message.metadata.error === true,
+  );
+}
+
 function getMaterialTypeLabel(type: MaterialListItem["type"]): string {
   if (type === "pasted_text") return "Pasted text";
   return type.toUpperCase();
@@ -82,6 +91,7 @@ function MessageCard({
 }) {
   const isAssistant = message.role === "assistant";
   const insufficient = isAssistant && getMessageInsufficientContext(message);
+  const isError = isAssistant && getMessageIsError(message);
 
   // Render answer with basic markdown: ## headings and - bullet lists
   function renderAnswer(text: string) {
@@ -135,11 +145,12 @@ function MessageCard({
         "rounded-xl border-2 border-black p-4 shadow-brutal-sm",
         isAssistant ? "bg-accent-blue" : "bg-paper-base",
         insufficient && "bg-accent-yellow",
+        isError && "bg-red-200 border-red-600 text-red-900",
       )}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Badge variant={isAssistant ? "blue" : "neutral"}>
-          {isAssistant ? "Answer" : "Your question"}
+        <Badge variant={isAssistant ? (isError ? "error" : "blue") : "neutral"}>
+          {isAssistant ? (isError ? "Error" : "Answer") : "Your question"}
         </Badge>
         {insufficient ? <Badge variant="yellow">Not in your notes</Badge> : null}
       </div>
@@ -150,7 +161,7 @@ function MessageCard({
         <p className="text-base font-semibold leading-7">{message.content}</p>
       )}
 
-      {isAssistant && !insufficient ? (
+      {isAssistant && !insufficient && !isError ? (
         <p className="mt-3 text-xs font-black uppercase tracking-wide text-zinc-500">
           ✓ Answer generated from your material
         </p>
@@ -420,6 +431,8 @@ export function RagChatSection({
   async function handleSubmitQuestion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (asking) return;
+
     if (!isAllMaterials && !selectedMaterial) {
       setFeedback({ variant: "error", title: "Select a material first." });
       return;
@@ -654,15 +667,15 @@ export function RagChatSection({
                     return (
                       <div
                         className={cn(
-                          "rounded-md border-2 border-black shadow-brutal-sm overflow-hidden",
-                          active ? "bg-accent-yellow" : "bg-paper-base",
+                          "rounded-md border-2 border-black p-2.5 shadow-brutal-sm transition",
+                          active ? "bg-accent-yellow" : "bg-paper-base hover:bg-accent-yellow/30",
                         )}
                         key={session.id}
                       >
                         {isRenaming ? (
-                          <div className="flex items-center gap-1 p-2">
+                          <div className="flex items-center gap-1.5">
                             <input
-                              className="min-w-0 flex-1 rounded border-2 border-black bg-paper-base px-2 py-1 text-sm font-black focus:outline-none"
+                              className="min-w-0 flex-1 rounded border border-black bg-paper-base px-2 py-1 text-xs font-black focus:outline-none"
                               maxLength={80}
                               onChange={(e) => setRenameValue(e.target.value)}
                               onKeyDown={(e) => {
@@ -674,7 +687,7 @@ export function RagChatSection({
                               value={renameValue}
                             />
                             <button
-                              className="shrink-0 rounded border-2 border-black bg-accent-blue px-2 py-1 text-xs font-black"
+                              className="shrink-0 rounded border border-black bg-accent-blue px-2 py-1 text-xs font-black hover:bg-blue-600 hover:text-white transition cursor-pointer"
                               disabled={renamePending}
                               onClick={() => void commitRename(session.id)}
                               type="button"
@@ -682,7 +695,7 @@ export function RagChatSection({
                               Save
                             </button>
                             <button
-                              className="shrink-0 rounded border-2 border-black bg-paper-base px-2 py-1 text-xs font-black"
+                              className="shrink-0 rounded border border-black bg-paper-base px-2 py-1 text-xs font-black hover:bg-black hover:text-white transition cursor-pointer"
                               onClick={cancelRename}
                               type="button"
                             >
@@ -690,35 +703,34 @@ export function RagChatSection({
                             </button>
                           </div>
                         ) : (
-                          <div className="flex flex-col">
+                          <div className="flex flex-col gap-1.5">
                             <button
                               aria-current={active ? "true" : undefined}
-                              className={cn(
-                                "w-full px-3 py-2 text-left text-sm font-black transition",
-                                active ? "hover:bg-yellow-300" : "hover:bg-accent-yellow",
-                              )}
+                              className="w-full text-left focus:outline-none cursor-pointer"
                               onClick={() => { void handleSelectSession(session.id); }}
                               type="button"
                             >
-                              <span className="flex min-w-0 items-center justify-between gap-2">
-                                <span className="truncate">{session.title}</span>
+                              <div className="flex items-center justify-between gap-2 min-w-0">
+                                <span className="text-sm font-black truncate flex-1 min-w-0">
+                                  {session.title}
+                                </span>
                                 {active ? (
-                                  <span className="shrink-0 rounded-sm border border-black bg-black px-1.5 py-0.5 text-[10px] uppercase text-white">
+                                  <span className="shrink-0 rounded-sm border border-black bg-black px-1.5 py-0.5 text-[9px] uppercase font-black text-white">
                                     Open
                                   </span>
                                 ) : null}
-                              </span>
+                              </div>
                             </button>
-                            <div className="flex items-center gap-1 px-2 pb-1.5">
+                            <div className="flex items-center gap-1.5">
                               <button
-                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-black hover:text-white"
+                                className="rounded border border-black bg-paper-base px-1.5 py-0.5 text-[10px] font-black text-zinc-700 transition hover:bg-accent-blue hover:text-white cursor-pointer"
                                 onClick={() => startRename(session)}
                                 type="button"
                               >
                                 Rename
                               </button>
                               <button
-                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-red-600 hover:text-white"
+                                className="rounded border border-black bg-paper-base px-1.5 py-0.5 text-[10px] font-black text-red-600 transition hover:bg-red-600 hover:text-white cursor-pointer"
                                 disabled={isDeleting}
                                 onClick={() => { void handleDeleteSession(session.id); }}
                                 type="button"

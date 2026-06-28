@@ -971,6 +971,11 @@ export async function askRagChatQuestion(
     return { ok: false, error: "This chat session is linked to a different material." };
   }
 
+  // All-materials mode: enforce that the session is not bound to a specific material
+  if (isAllMaterials && session.data.material_id !== null) {
+    return { ok: false, error: "This chat session is linked to a specific material." };
+  }
+
   // Single-material mode: validate material exists and is completed
   if (!isAllMaterials && rawMaterialId) {
     const material = await getOwnedCompletedMaterialForRag({
@@ -1011,6 +1016,17 @@ export async function askRagChatQuestion(
       materialId: rawMaterialId ?? undefined,
       userId: user.data,
       error: new Error(answer.error),
+    });
+    // Save a clean assistant error message linked to that question so we don't leave a dangling question
+    await saveChatMessage({
+      sessionId,
+      userId: user.data,
+      role: "assistant",
+      content: answer.error || "AI service is temporarily unavailable. Please try again later.",
+      metadata: {
+        material_id: rawMaterialId ?? "__all__",
+        error: true,
+      },
     });
     return answer;
   }

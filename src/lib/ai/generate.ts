@@ -62,10 +62,16 @@ export async function generateValidatedJson<TSchema extends z.ZodType>(
     originalPrompt: options.prompt,
     validationHint: options.validationHint,
   });
-  const retryGeneration = await generateTextWithGemini(repairPrompt, {
-    model: options.model,
-    temperature: options.temperature,
-  });
+
+  let retryGeneration;
+  try {
+    retryGeneration = await generateTextWithGemini(repairPrompt, {
+      model: options.model,
+      temperature: options.temperature,
+    });
+  } catch (error) {
+    throw new AiInvalidOutputError({ cause: error, rawText: firstGeneration.text });
+  }
 
   try {
     return {
@@ -75,10 +81,9 @@ export async function generateValidatedJson<TSchema extends z.ZodType>(
       retryCount: 1,
     };
   } catch (error) {
-    if (error instanceof AiInvalidOutputError) {
-      throw error;
-    }
-
-    throw new AiInvalidOutputError({ cause: error });
+    throw new AiInvalidOutputError({
+      cause: error,
+      rawText: retryGeneration.text || firstGeneration.text,
+    });
   }
 }
