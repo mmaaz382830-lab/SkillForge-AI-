@@ -31,7 +31,7 @@ export type GroundedAnswerResult = {
 
 type GroundedAnswerOutput = z.infer<typeof groundedAnswerOutputSchema>;
 
-const MAX_CONTEXT_CHUNKS = 8;
+const MAX_CONTEXT_CHUNKS = 12;
 const MAX_CONTEXT_CHARS_PER_CHUNK = 1_800;
 const SOURCE_SNIPPET_CHARS = 260;
 
@@ -102,9 +102,14 @@ FORMATTING RULES:
 CONTENT RULES:
 - Use ONLY the material sections provided above. Do not add general knowledge.
 - Do not invent facts, citations, page numbers, or source references.
-- If the material sections do not contain enough information to answer the question, set insufficient_context to true and set answer exactly to: "${RAG_INSUFFICIENT_CONTEXT_MESSAGE}"
-- Do not mention internal chunk IDs or technical retrieval details in the answer.
+- Do not mention internal chunk IDs, similarity scores, or technical retrieval details in the answer.
 - Return valid JSON only. Do not include markdown fences or prose outside JSON.
+
+INSUFFICIENT CONTEXT RULE:
+- Set insufficient_context to true ONLY when the retrieved sections contain NO relevant information at all and you cannot give any useful answer.
+- For broad overview questions ("describe all pdfs", "summarize materials", "what are these notes about"), answer using whatever relevant content IS present in the sections — do NOT mark as insufficient just because coverage is partial.
+- For definition questions ("what is RAG", "what is backend"), if the retrieved sections contain any definition or description, answer from it.
+- When in doubt and you have ANY useful context, set insufficient_context to false and give the best answer you can.
 
 Return JSON with this exact shape:
 {

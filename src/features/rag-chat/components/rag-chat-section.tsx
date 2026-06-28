@@ -31,14 +31,6 @@ type RagChatMaterial = Pick<
   "id" | "title" | "type" | "chunk_count" | "created_at"
 >;
 
-type SourceSnippet = {
-  chunk_id: string;
-  material_id: string;
-  chunk_index: number;
-  snippet: string;
-  similarity: number;
-};
-
 type Feedback = {
   variant: ToastVariant;
   title: string;
@@ -81,66 +73,12 @@ function sortSessions(sessions: ChatSessionListItem[]): ChatSessionListItem[] {
   );
 }
 
-// ─── SourceCards (hidden by default — collapsed toggle) ──────────────────────
-
-function SourceCards({
-  sources,
-  materials,
-}: {
-  sources: SourceSnippet[];
-  materials: RagChatMaterial[];
-}) {
-  const [open, setOpen] = useState(false);
-  const visible = sources.slice(0, 6);
-
-  if (visible.length === 0) return null;
-
-  function getMaterialTitle(materialId: string): string | undefined {
-    return materials.find((m) => m.id === materialId)?.title;
-  }
-
-  return (
-    <div className="mt-3">
-      <button
-        className="text-xs font-black text-zinc-500 underline-offset-2 hover:underline focus:outline-none"
-        onClick={() => setOpen((v) => !v)}
-        type="button"
-      >
-        {open ? "Hide sources ▲" : "Show where this came from ▼"}
-      </button>
-
-      {open ? (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {visible.map((source) => {
-            const matTitle = getMaterialTitle(source.material_id);
-            return (
-              <article
-                className="rounded-lg border-2 border-black bg-paper-base p-3 text-sm shadow-brutal-sm"
-                key={source.chunk_id}
-              >
-                {matTitle ? (
-                  <p className="mb-1 truncate text-xs font-black text-zinc-500">{matTitle}</p>
-                ) : null}
-                <p className="font-semibold leading-6">{source.snippet}</p>
-              </article>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 // ─── MessageCard ─────────────────────────────────────────────────────────────
 
 function MessageCard({
   message,
-  sources,
-  materials,
 }: {
   message: ChatMessageView;
-  sources: SourceSnippet[];
-  materials: RagChatMaterial[];
 }) {
   const isAssistant = message.role === "assistant";
   const insufficient = isAssistant && getMessageInsufficientContext(message);
@@ -225,9 +163,6 @@ function MessageCard({
         </p>
       ) : null}
 
-      {isAssistant && sources.length > 0 ? (
-        <SourceCards sources={sources} materials={materials} />
-      ) : null}
     </article>
   );
 }
@@ -253,9 +188,6 @@ export function RagChatSection({
   const [selectedMaterialId, setSelectedMaterialId] = useState(initialSelectedMaterialId);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
-  const [sourcesByMessageId, setSourcesByMessageId] = useState<
-    Record<string, SourceSnippet[]>
-  >({});
 
   const [question, setQuestion] = useState("");
   const [feedback, setFeedback] = useState<Feedback | null>(
@@ -317,14 +249,6 @@ export function RagChatSection({
     setSelectedMaterialId(value);
     setSelectedSessionId("");
     setMessages([]);
-    setSourcesByMessageId({});
-  }
-
-  // Source chunk IDs are kept in DB for grounding integrity.
-  // Snippets are not fetched for display (hidden from normal users).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function loadHistoricalSources(..._args: unknown[]) {
-    // intentionally empty — source_chunk_ids remain stored in DB
   }
 
   // ── Session actions ────────────────────────────────────────────────────────
@@ -332,7 +256,6 @@ export function RagChatSection({
   async function handleSelectSession(sessionId: string) {
     setFeedback(null);
     setSelectedSessionId(sessionId);
-    setSourcesByMessageId({});
     setLoadingSessionId(sessionId);
 
     const result = await loadChatSessionMessages(sessionId);
@@ -345,7 +268,6 @@ export function RagChatSection({
     }
 
     setMessages(result.data);
-    void loadHistoricalSources(result.data, sessionId);
   }
 
   async function handlePrepareMaterial() {
@@ -424,7 +346,6 @@ export function RagChatSection({
     setSessionRows((rows) => [result.data, ...rows]);
     setSelectedSessionId(result.data.id);
     setMessages([]);
-    setSourcesByMessageId({});
     setFeedback({
       variant: "success",
       title: "New chat started.",
@@ -488,7 +409,6 @@ export function RagChatSection({
     if (selectedSessionId === sessionId) {
       setSelectedSessionId("");
       setMessages([]);
-      setSourcesByMessageId({});
     }
 
     setFeedback({ variant: "success", title: "Chat deleted." });
@@ -536,13 +456,13 @@ export function RagChatSection({
       return;
     }
 
-    // For "all materials" mode, we pick the first prepared material
-    // and rely on retrieval with filter_material_id = null (handled by the RPC)
-    const effectiveMaterialId = isAllMaterials
-      ? (preparedMaterials[0]?.id ?? "")
-      : (selectedMaterial?.id ?? "");
+    // For "all materials" mode pass null so the server searches ALL user chunks.
+    // For single material mode pass the material's ID.
+    const effectiveMaterialId: string | null = isAllMaterials
+      ? null
+      : (selectedMaterial?.id ?? null);
 
-    if (!effectiveMaterialId) {
+    if (!isAllMaterials && !effectiveMaterialId) {
       setFeedback({ variant: "error", title: "No prepared material available." });
       setAsking(false);
       return;
@@ -550,7 +470,7 @@ export function RagChatSection({
 
     const result = await askRagChatQuestion({
       sessionId: activeSessionId,
-      materialId: effectiveMaterialId,
+      materialId: effectiveMaterialId, // null for all-materials, string for single
       question: trimmedQuestion,
     });
 
@@ -582,16 +502,11 @@ export function RagChatSection({
       metadata: {
         material_id: effectiveMaterialId,
         insufficient_context: result.data.insufficient_context,
-        source_count: result.data.sources.length,
       },
       created_at: now,
     };
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
-    setSourcesByMessageId((prev) => ({
-      ...prev,
-      [assistantMessage.id]: result.data.sources,
-    }));
     setQuestion("");
     setFeedback({
       variant: result.data.insufficient_context ? "warning" : "success",
@@ -739,7 +654,7 @@ export function RagChatSection({
                     return (
                       <div
                         className={cn(
-                          "rounded-md border-2 border-black shadow-brutal-sm",
+                          "rounded-md border-2 border-black shadow-brutal-sm overflow-hidden",
                           active ? "bg-accent-yellow" : "bg-paper-base",
                         )}
                         key={session.id}
@@ -775,32 +690,35 @@ export function RagChatSection({
                             </button>
                           </div>
                         ) : (
-                          <>
+                          <div className="flex flex-col">
                             <button
                               aria-current={active ? "true" : undefined}
-                              className="min-h-11 w-full px-3 py-2 text-left text-sm font-black transition hover:bg-accent-yellow"
+                              className={cn(
+                                "w-full px-3 py-2 text-left text-sm font-black transition",
+                                active ? "hover:bg-yellow-300" : "hover:bg-accent-yellow",
+                              )}
                               onClick={() => { void handleSelectSession(session.id); }}
                               type="button"
                             >
                               <span className="flex min-w-0 items-center justify-between gap-2">
                                 <span className="truncate">{session.title}</span>
                                 {active ? (
-                                  <span className="shrink-0 rounded-sm border-2 border-black bg-paper-base px-2 py-0.5 text-[10px] uppercase">
+                                  <span className="shrink-0 rounded-sm border border-black bg-black px-1.5 py-0.5 text-[10px] uppercase text-white">
                                     Open
                                   </span>
                                 ) : null}
                               </span>
                             </button>
-                            <div className="flex gap-1 border-t-2 border-black px-2 py-1">
+                            <div className="flex items-center gap-1 px-2 pb-1.5">
                               <button
-                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-accent-yellow"
+                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-black hover:text-white"
                                 onClick={() => startRename(session)}
                                 type="button"
                               >
                                 Rename
                               </button>
                               <button
-                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-accent-pink"
+                                className="rounded px-2 py-0.5 text-[11px] font-black text-zinc-600 transition hover:bg-red-600 hover:text-white"
                                 disabled={isDeleting}
                                 onClick={() => { void handleDeleteSession(session.id); }}
                                 type="button"
@@ -808,7 +726,7 @@ export function RagChatSection({
                                 {isDeleting ? "Deleting…" : "Delete"}
                               </button>
                             </div>
-                          </>
+                          </div>
                         )}
                       </div>
                     );
@@ -865,9 +783,7 @@ export function RagChatSection({
                   {messages.map((msg) => (
                     <MessageCard
                       key={msg.id}
-                      materials={materialRows}
                       message={msg}
-                      sources={sourcesByMessageId[msg.id] ?? []}
                     />
                   ))}
                   {asking ? (

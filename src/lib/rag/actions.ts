@@ -70,7 +70,8 @@ type CreateChatSessionInput = {
 
 type AskRagChatQuestionInput = {
   sessionId: string;
-  materialId: string;
+  /** null / empty = "all prepared materials" mode */
+  materialId: string | null;
   question: string;
   topK?: number;
 };
@@ -555,6 +556,103 @@ export async function answerQuestionFromMaterial(
   }
 }
 
+/**
+ * All-materials mode: retrieve chunks across every material the user owns
+ * (filter_material_id = null in the RPC). Security is enforced server-side
+ * by auth.uid() inside match_material_chunks. topK is raised to 12 for
+ * broad overview questions.
+ */
+async function answerQuestionAllMaterials(input: {
+  question: string;
+  topK?: number;
+  userId: string;
+}): Promise<MaterialActionResult<RagAnswerResult>> {
+  const question = input.question.trim();
+  const startedAt = Date.now();
+
+  try {
+    await assertAiUsageAllowed({
+      userId: input.userId,
+      featureType: "chat",
+      metadata: { material_id: "__all__", requested_count: input.topK ?? null },
+    });
+
+    const chunks = await retrieveMaterialChunks({
+      question,
+      materialId: null, // null → RPC returns all user's chunks
+      topK: input.topK,
+    });
+
+    if (chunks.length === 0) {
+      return {
+        ok: true,
+        data: {
+          material_id: "__all__",
+          answer: RAG_INSUFFICIENT_CONTEXT_MESSAGE,
+          sources: [],
+          source_chunk_ids: [],
+          insufficient_context: true,
+        },
+      };
+    }
+
+    const grounded = await generateGroundedAnswer({ question, chunks });
+
+    await logAiUsageEvent({
+      userId: input.userId,
+      featureType: "chat",
+      status: "success",
+      provider: grounded.provider ?? "gemini",
+      model: grounded.model,
+      metadata: {
+        material_id: "__all__",
+        requested_count: input.topK ?? chunks.length,
+        chunk_count: chunks.length,
+        duration_ms: Date.now() - startedAt,
+        retry_count: grounded.retry_count,
+      },
+    });
+
+    return {
+      ok: true,
+      data: {
+        material_id: "__all__",
+        answer: grounded.answer,
+        sources: grounded.sources,
+        source_chunk_ids: grounded.source_chunk_ids,
+        insufficient_context: grounded.insufficient_context,
+      },
+    };
+  } catch (error) {
+    if (error instanceof AiUsageLimitError) {
+      return { ok: false, error: error.safeMessage };
+    }
+    const errorCode = getRagAnswerErrorCode(error);
+    logRagAnswerError({
+      step:
+        error instanceof AiProviderError || error instanceof AiConfigurationError
+          ? "answer"
+          : "retrieval",
+      materialId: "__all__",
+      userId: input.userId,
+      error,
+    });
+    await logAiUsageEvent({
+      userId: input.userId,
+      featureType: "chat",
+      status: "error",
+      model: null,
+      errorCode,
+      metadata: {
+        material_id: "__all__",
+        requested_count: input.topK ?? null,
+        duration_ms: Date.now() - startedAt,
+        error_code: errorCode,
+      },
+    });
+    return { ok: false, error: getSafeAiErrorMessage(error) };
+  }
+}
 
 
 type ChatMessageMetadata = Record<string, string | number | boolean | null>;
@@ -824,36 +922,23 @@ export async function askRagChatQuestion(
   input: AskRagChatQuestionInput,
 ): Promise<MaterialActionResult<AskRagChatQuestionResult>> {
   const sessionId = normalizeRequiredId(input.sessionId);
-  const materialId = normalizeRequiredId(input.materialId);
+  // null / empty string = "all prepared materials" mode
+  const rawMaterialId = input.materialId?.trim() || null;
+  const isAllMaterials = !rawMaterialId;
   const question = input.question.trim();
-  const topK = normalizeTopK(input.topK);
+  // Raise topK for broad all-materials queries (capped by normalizeTopK at 20)
+  const topK = normalizeTopK(input.topK ?? (isAllMaterials ? 12 : undefined));
 
   if (!sessionId) {
-    return {
-      ok: false,
-      error: "Chat session not found.",
-    };
-  }
-
-  if (!materialId) {
-    return {
-      ok: false,
-      error: "Material not found.",
-    };
+    return { ok: false, error: "Chat session not found." };
   }
 
   if (!question) {
-    return {
-      ok: false,
-      error: "Please enter a question first.",
-    };
+    return { ok: false, error: "Please enter a question first." };
   }
 
   if (question.length > 2_000) {
-    return {
-      ok: false,
-      error: "Question is too long. Please ask a shorter question.",
-    };
+    return { ok: false, error: "Question is too long. Please ask a shorter question." };
   }
 
   const user = await getAuthenticatedRagUserId();
@@ -862,49 +947,46 @@ export async function askRagChatQuestion(
     logChatPersistenceError({
       step: "auth",
       sessionId,
-      materialId,
+      materialId: rawMaterialId ?? undefined,
       error: new Error(user.error),
     });
     return user;
   }
 
-  const session = await getOwnedChatSession({
-    sessionId,
-    userId: user.data,
-  });
+  const session = await getOwnedChatSession({ sessionId, userId: user.data });
 
   if (!session.ok) {
     logChatPersistenceError({
       step: "session",
       sessionId,
-      materialId,
+      materialId: rawMaterialId ?? undefined,
       userId: user.data,
       error: new Error(session.error),
     });
     return session;
   }
 
-  if (session.data.material_id && session.data.material_id !== materialId) {
-    return {
-      ok: false,
-      error: "This chat session is linked to a different material.",
-    };
+  // Single-material mode: enforce that the session is bound to the same material
+  if (!isAllMaterials && session.data.material_id && session.data.material_id !== rawMaterialId) {
+    return { ok: false, error: "This chat session is linked to a different material." };
   }
 
-  const material = await getOwnedCompletedMaterialForRag({
-    materialId,
-    userId: user.data,
-  });
-
-  if (!material.ok) {
-    logChatPersistenceError({
-      step: "material",
-      sessionId,
-      materialId,
+  // Single-material mode: validate material exists and is completed
+  if (!isAllMaterials && rawMaterialId) {
+    const material = await getOwnedCompletedMaterialForRag({
+      materialId: rawMaterialId,
       userId: user.data,
-      error: new Error(material.error),
     });
-    return material;
+    if (!material.ok) {
+      logChatPersistenceError({
+        step: "material",
+        sessionId,
+        materialId: rawMaterialId,
+        userId: user.data,
+        error: new Error(material.error),
+      });
+      return material;
+    }
   }
 
   const userMessage = await saveChatMessage({
@@ -912,26 +994,21 @@ export async function askRagChatQuestion(
     userId: user.data,
     role: "user",
     content: question,
-    metadata: {
-      material_id: materialId,
-    },
+    metadata: { material_id: rawMaterialId ?? "__all__" },
   });
 
-  if (!userMessage.ok) {
-    return userMessage;
-  }
+  if (!userMessage.ok) return userMessage;
 
-  const answer = await answerQuestionFromMaterial({
-    materialId,
-    question,
-    topK,
-  });
+  // Route to the right retrieval strategy
+  const answer = isAllMaterials
+    ? await answerQuestionAllMaterials({ question, topK, userId: user.data })
+    : await answerQuestionFromMaterial({ materialId: rawMaterialId!, question, topK });
 
   if (!answer.ok) {
     logChatPersistenceError({
       step: "answer",
       sessionId,
-      materialId,
+      materialId: rawMaterialId ?? undefined,
       userId: user.data,
       error: new Error(answer.error),
     });
@@ -945,17 +1022,15 @@ export async function askRagChatQuestion(
     content: answer.data.answer,
     sourceChunkIds: answer.data.source_chunk_ids,
     metadata: {
-      material_id: materialId,
+      material_id: rawMaterialId ?? "__all__",
       insufficient_context: answer.data.insufficient_context,
       source_count: answer.data.sources.length,
     },
   });
 
-  if (!assistantMessage.ok) {
-    return assistantMessage;
-  }
+  if (!assistantMessage.ok) return assistantMessage;
 
-  revalidateChatViews(materialId);
+  revalidateChatViews(rawMaterialId);
 
   return {
     ok: true,
