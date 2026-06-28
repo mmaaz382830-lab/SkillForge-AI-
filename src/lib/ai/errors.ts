@@ -56,12 +56,14 @@ export class AiProviderError extends Error {
 export class AiInvalidOutputError extends Error {
   readonly safeMessage: string;
   readonly cause?: unknown;
+  readonly rawText?: string;
 
-  constructor(options?: AiErrorOptions) {
+  constructor(options?: AiErrorOptions & { rawText?: string }) {
     super(AI_SAFE_MESSAGES.invalidOutput);
     this.name = "AiInvalidOutputError";
     this.safeMessage = AI_SAFE_MESSAGES.invalidOutput;
     this.cause = options?.cause;
+    this.rawText = options?.rawText;
   }
 }
 

@@ -2,6 +2,11 @@ import "server-only";
 
 import { GoogleGenAI } from "@google/genai";
 
+import {
+  AI_PROVIDER,
+  DEFAULT_GEMINI_TEXT_MODEL,
+  DEFAULT_GEMINI_TEMPERATURE,
+} from "@/lib/ai/constants";
 import { getGeminiApiKey } from "@/lib/ai/env";
 import {
   AiConfigurationError,
@@ -9,13 +14,16 @@ import {
   AI_SAFE_MESSAGES,
 } from "@/lib/ai/errors";
 
-export const AI_PROVIDER = "gemini" as const;
-export const DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash";
-export const DEFAULT_GEMINI_TEMPERATURE = 0.25;
+export {
+  AI_PROVIDER,
+  DEFAULT_GEMINI_TEXT_MODEL,
+  DEFAULT_GEMINI_TEMPERATURE,
+} from "@/lib/ai/constants";
 
 type GenerateTextOptions = {
   model?: string;
   temperature?: number;
+  responseMimeType?: "application/json" | "text/plain";
 };
 
 export type GeminiTextGeneration = {
@@ -72,7 +80,7 @@ export async function generateTextWithGemini(
       contents: prompt,
       config: {
         temperature,
-        responseMimeType: "application/json",
+        responseMimeType: options.responseMimeType ?? "application/json",
       },
     });
     const text = response.text?.trim();
