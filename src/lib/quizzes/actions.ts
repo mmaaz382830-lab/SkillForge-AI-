@@ -23,18 +23,38 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   Quiz,
   QuizActionResult,
+  QuizAttempt,
+  QuizAttemptSubmissionInput,
+  QuizAttemptSummary,
   QuizGenerationInput,
+  QuizQuestion,
   QuizView,
 } from "@/types/quizzes";
 
-import { getAuthenticatedQuizUserId } from "./queries";
-import { validateQuizGenerationInput } from "./validation";
+import {
+  getAuthenticatedQuizUserId,
+  getQuizAttemptReview,
+  getSanitizedQuizForAttempt,
+} from "./queries";
+import {
+  validateQuizAttemptSubmissionInput,
+  validateQuizGenerationInput,
+} from "./validation";
 
 const QUIZ_SELECT =
   "id,user_id,material_id,title,topic,difficulty,question_count,created_at,updated_at";
 
+const QUESTION_SELECT =
+  "id,quiz_id,user_id,question,options,correct_answer,explanation,topic,difficulty,order_index,created_at";
+
+const QUIZ_ATTEMPT_SELECT =
+  "id,quiz_id,user_id,score,total_questions,correct_count,answers,started_at,completed_at";
+
 const QUIZ_GENERATION_VALIDATION_HINT =
   "Return quiz_title, topic, difficulty, and the requested number of questions. Each question needs order_index, question, options (exactly 4 distinct non-empty strings), correct_answer (must exactly match one option), explanation, topic, and difficulty.";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type CompletedMaterialForQuiz = {
   id: string;
@@ -155,6 +175,230 @@ function revalidateQuizViews() {
   revalidatePath(dashboardRoutes.quizzes);
 }
 
+function revalidateQuizAttemptViews() {
+  revalidateQuizViews();
+  revalidatePath(dashboardRoutes.progress);
+}
+
+async function recordQuizAttemptProgressEvent(input: {
+  userId: string;
+  quizId: string;
+  attemptId: string;
+  quizTitle: string;
+  score: number;
+  totalQuestions: number;
+  correctCount: number;
+}): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("progress_events").insert({
+    user_id: input.userId,
+    event_type: "quiz_attempted",
+    entity_type: "quiz",
+    entity_id: input.quizId,
+    metadata: {
+      attempt_id: input.attemptId,
+      score: input.score,
+      total_questions: input.totalQuestions,
+      correct_count: input.correctCount,
+      quiz_title: input.quizTitle,
+    },
+  });
+
+  return !error;
+}
+
+export async function loadQuizForAttempt(quizId: string) {
+  return getSanitizedQuizForAttempt(quizId);
+}
+
+export async function loadQuizAttemptReview(attemptId: string) {
+  return getQuizAttemptReview(attemptId);
+}
+export async function deleteQuiz(
+  quizId: string,
+): Promise<QuizActionResult<{ deleted: boolean }>> {
+  const user = await getAuthenticatedQuizUserId();
+
+  if (!user.ok) {
+    return user;
+  }
+
+  const normalizedQuizId = quizId.trim();
+
+  if (!UUID_PATTERN.test(normalizedQuizId)) {
+    return {
+      ok: false,
+      error: "Quiz could not be deleted.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("delete_quiz", {
+    p_quiz_id: normalizedQuizId,
+  });
+
+  if (error || data !== true) {
+    console.error("[Day8 Quiz] Failed to delete quiz", {
+      quizId: normalizedQuizId,
+      code: error?.code,
+      message: error?.message,
+    });
+
+    return {
+      ok: false,
+      error: "Quiz could not be deleted.",
+    };
+  }
+
+  revalidateQuizAttemptViews();
+
+  return {
+    ok: true,
+    data: { deleted: true },
+  };
+}
+export async function submitQuizAttempt(
+  input: QuizAttemptSubmissionInput,
+): Promise<QuizActionResult<QuizAttemptSummary>> {
+  const user = await getAuthenticatedQuizUserId();
+
+  if (!user.ok) {
+    return user;
+  }
+
+  const validation = validateQuizAttemptSubmissionInput(input);
+
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: quiz, error: quizError } = await supabase
+    .from("quizzes")
+    .select(QUIZ_SELECT)
+    .eq("id", validation.data.quizId)
+    .eq("user_id", user.data)
+    .maybeSingle<Quiz>();
+
+  if (quizError || !quiz) {
+    return {
+      ok: false,
+      error: "Quiz not found.",
+    };
+  }
+
+  const { data: questions, error: questionsError } = await supabase
+    .from("quiz_questions")
+    .select(QUESTION_SELECT)
+    .eq("quiz_id", quiz.id)
+    .eq("user_id", user.data)
+    .order("order_index", { ascending: true })
+    .returns<QuizQuestion[]>();
+
+  if (questionsError) {
+    console.error("[Day8 Quiz] Failed to load questions for scoring", {
+      quizId: quiz.id,
+      code: questionsError.code,
+      message: questionsError.message,
+    });
+
+    return {
+      ok: false,
+      error: "Could not score quiz. Please try again.",
+    };
+  }
+
+  const savedQuestions = questions ?? [];
+
+  if (savedQuestions.length === 0) {
+    return {
+      ok: false,
+      error: "This quiz has no questions to score.",
+    };
+  }
+
+  const questionById = new Map(
+    savedQuestions.map((question) => [question.id, question]),
+  );
+  const normalizedAnswers: Record<string, string> = {};
+
+  for (const [questionId, selectedAnswer] of Object.entries(
+    validation.data.answers,
+  )) {
+    const question = questionById.get(questionId);
+
+    if (!question || !question.options.includes(selectedAnswer)) {
+      return {
+        ok: false,
+        error: "Submitted answers do not match this quiz.",
+      };
+    }
+
+    normalizedAnswers[questionId] = selectedAnswer;
+  }
+
+  const totalQuestions = savedQuestions.length;
+  const correctCount = savedQuestions.filter(
+    (question) => normalizedAnswers[question.id] === question.correct_answer,
+  ).length;
+  const score = Math.round((correctCount / totalQuestions) * 100);
+  const completedAt = new Date().toISOString();
+
+  const { data: attempt, error: attemptError } = await supabase
+    .from("quiz_attempts")
+    .insert({
+      quiz_id: quiz.id,
+      user_id: user.data,
+      score,
+      total_questions: totalQuestions,
+      correct_count: correctCount,
+      answers: normalizedAnswers,
+      completed_at: completedAt,
+    })
+    .select(QUIZ_ATTEMPT_SELECT)
+    .maybeSingle<QuizAttempt>();
+
+  if (attemptError || !attempt) {
+    console.error("[Day8 Quiz] Failed to save quiz attempt", {
+      quizId: quiz.id,
+      code: attemptError?.code,
+      message: attemptError?.message,
+    });
+
+    return {
+      ok: false,
+      error: "Score could not be saved.",
+    };
+  }
+
+  const progressSaved = await recordQuizAttemptProgressEvent({
+    userId: user.data,
+    quizId: quiz.id,
+    attemptId: attempt.id,
+    quizTitle: quiz.title,
+    score,
+    totalQuestions,
+    correctCount,
+  });
+
+  revalidateQuizAttemptViews();
+
+  return {
+    ok: true,
+    data: {
+      id: attempt.id,
+      quiz_id: attempt.quiz_id,
+      quiz_title: quiz.title,
+      score: Number(attempt.score),
+      total_questions: attempt.total_questions,
+      correct_count: attempt.correct_count,
+      completed_at: attempt.completed_at,
+      progress_warning: progressSaved
+        ? undefined
+        : "Progress could not be recorded.",
+    },
+  };
+}
 export async function generateQuiz(
   input: QuizGenerationInput,
 ): Promise<QuizActionResult<QuizView>> {
@@ -311,13 +555,9 @@ export async function generateQuiz(
           quiz_id: quiz.id,
           question: q.question,
           options: q.options,
-          correct_answer: q.correct_answer,
-          explanation: q.explanation,
           topic: q.topic,
           difficulty: q.difficulty as Quiz["difficulty"],
           order_index: q.order_index,
-          created_at: quiz.created_at,
-          updated_at: quiz.updated_at,
         })),
       },
     };
@@ -352,3 +592,11 @@ export async function generateQuiz(
     };
   }
 }
+
+
+
+
+
+
+
+

@@ -5,16 +5,18 @@ import { useState } from "react";
 
 import { EmptyState } from "@/components/states/empty-state";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Toast, type ToastVariant } from "@/components/ui/toast";
 import { generateInterviewQuestions } from "@/lib/interviews/actions";
 import type {
   InterviewGenerationInput,
-  InterviewMessageFeedback,
+  InterviewQuestionMessageFeedback,
   InterviewSessionView,
 } from "@/types/interviews";
 import type { MaterialRoadmapOption } from "@/types/materials";
 
 import { InterviewGenerationForm } from "./interview-generation-form";
+import { InterviewPracticePanel } from "./interview-practice-panel";
 
 type InterviewSectionProps = {
   sessions: InterviewSessionView[];
@@ -44,6 +46,11 @@ function formatSessionDate(value: string): string {
   }).format(new Date(value));
 }
 
+function getPracticeActionLabel(session: InterviewSessionView): string {
+  if (session.status === "completed") return "Review practice";
+  return "Start practice";
+}
+
 function InterviewQuestionList({ session }: { session: InterviewSessionView }) {
   return (
     <article className="brutal-card grid gap-4 p-5">
@@ -55,9 +62,11 @@ function InterviewQuestionList({ session }: { session: InterviewSessionView }) {
               {formatDifficulty(session.difficulty)}
             </Badge>
             <Badge variant="neutral">
-              {session.messages.length}{" "}
-              {session.messages.length === 1 ? "question" : "questions"}
+              {session.messages.length} {session.messages.length === 1 ? "question" : "questions"}
             </Badge>
+            {session.status === "completed" ? (
+              <Badge variant="green">Completed</Badge>
+            ) : null}
           </div>
           <h3 className="mt-3 font-heading text-2xl font-black leading-tight">
             {session.topic} - Mock Interview
@@ -70,7 +79,7 @@ function InterviewQuestionList({ session }: { session: InterviewSessionView }) {
 
       <div className="grid gap-3">
         {session.messages.map((msg) => {
-          const meta = msg.feedback as InterviewMessageFeedback | null;
+          const meta = msg.feedback as InterviewQuestionMessageFeedback | null;
 
           return (
             <div
@@ -96,31 +105,6 @@ function InterviewQuestionList({ session }: { session: InterviewSessionView }) {
               <p className="font-heading text-lg font-black leading-snug">
                 {msg.content}
               </p>
-
-              {meta?.expected_answer_points &&
-              meta.expected_answer_points.length > 0 ? (
-                <div className="mt-3 rounded-md border-2 border-black bg-accent-blue px-3 py-2.5">
-                  <p className="text-xs font-black uppercase text-zinc-600">
-                    Key points to cover
-                  </p>
-                  <ul className="mt-2 grid gap-1.5">
-                    {meta.expected_answer_points.map((point, i) => (
-                      <li
-                        className="flex items-start gap-2 text-sm font-semibold leading-6"
-                        key={i}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="mt-1 inline-block h-4 w-4 shrink-0 rounded border border-black bg-white text-center text-[10px] font-black leading-4"
-                        >
-                          {i + 1}
-                        </span>
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
             </div>
           );
         })}
@@ -135,6 +119,7 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     sessions[0]?.id ?? null,
   );
+  const [activePracticeSessionId, setActivePracticeSessionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [generating, setGenerating] = useState(false);
   const selectedSession =
@@ -162,13 +147,19 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
       ...currentSessions.filter((session) => session.id !== result.data.id),
     ]);
     setSelectedSessionId(result.data.id);
+    setActivePracticeSessionId(result.data.id);
     setFeedback({
       variant: "success",
       title: "Interview questions generated and saved.",
-      description: "The new interview session is selected below.",
+      description: "Practice is ready below.",
     });
     router.refresh();
     return true;
+  }
+
+  function selectSession(sessionId: string) {
+    setSelectedSessionId(sessionId);
+    setActivePracticeSessionId(null);
   }
 
   return (
@@ -177,7 +168,7 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
-              Day 6 generator
+              Day 8 practice loop
             </p>
             <h2
               className="mt-1 font-heading text-3xl font-black leading-tight"
@@ -186,14 +177,11 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
               Mock Interview
             </h2>
             <p className="mt-3 max-w-2xl font-semibold leading-7">
-              Generate technical interview questions from your processed
-              material. Practice explaining concepts clearly. Questions include
-              expected answer points to guide your revision.
+              Generate technical interview questions from your processed material, then answer one question at a time and review structured feedback.
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-md border-2 border-black bg-accent-blue px-4 py-3 text-sm font-semibold shadow-brutal-sm">
-                {visibleSessions.length}{" "}
-                {visibleSessions.length === 1 ? "session" : "sessions"} saved
+              <div className="rounded-md border-2 border-black bg-accent-pink px-4 py-3 text-sm font-semibold shadow-brutal-sm">
+                {visibleSessions.length} {visibleSessions.length === 1 ? "session" : "sessions"} saved
               </div>
               <div className="rounded-md border-2 border-black bg-paper-muted px-4 py-3 text-sm font-semibold shadow-brutal-sm">
                 {materials.length === 0
@@ -206,8 +194,7 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
           <div className="rounded-lg border-2 border-black bg-accent-blue p-4 shadow-brutal">
             <h3 className="font-heading text-xl font-black">Generate with AI</h3>
             <p className="mb-3 mt-1 text-sm font-semibold leading-6">
-              Usage is checked before the AI call. Only saved sessions count as
-              successful usage.
+              Usage is checked before the AI call. Only saved sessions count as successful usage.
             </p>
             <InterviewGenerationForm
               materials={materials}
@@ -232,7 +219,7 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
           description={
             materials.length === 0
               ? "Upload and process a material first to generate an interview session."
-              : "Generate an interview session from a completed material. Each session includes questions with expected answer points to guide your practice."
+              : "Generate an interview session from a completed material. Each session can now be practiced one question at a time."
           }
           title="No interview sessions yet."
         />
@@ -247,10 +234,10 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
                 <button
                   aria-pressed={selected}
                   className={`rounded-lg border-2 border-black p-3 text-left shadow-brutal-sm transition hover:-translate-y-0.5 hover:shadow-brutal ${
-                    selected ? "bg-accent-blue" : "bg-paper-base"
+                    selected ? "bg-accent-pink" : "bg-paper-base"
                   }`}
                   key={session.id}
-                  onClick={() => setSelectedSessionId(session.id)}
+                  onClick={() => selectSession(session.id)}
                   type="button"
                 >
                   <span className="block font-heading text-base font-black leading-tight">
@@ -259,13 +246,50 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
                   <span className="mt-2 block text-xs font-black uppercase text-zinc-600">
                     {session.messages.length} questions - {formatSessionDate(session.created_at)}
                   </span>
+                  <span className="mt-2 flex flex-wrap gap-2">
+                    <Badge variant={session.status === "completed" ? "green" : "pink"}>
+                      {session.status === "completed" ? "Completed" : "Ready"}
+                    </Badge>
+                    {session.score != null ? (
+                      <Badge variant="yellow">Score {Number(session.score)} / 10</Badge>
+                    ) : null}
+                  </span>
                 </button>
               );
             })}
           </aside>
 
           {selectedSession ? (
-            <InterviewQuestionList session={selectedSession} />
+            <div className="grid gap-5">
+              <div className="brutal-card grid gap-4 bg-paper-muted p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="font-heading text-2xl font-black leading-tight">
+                      {selectedSession.topic}
+                    </h3>
+                    <p className="mt-2 text-sm font-semibold leading-6">
+                      Preview the generated questions, then start the text-only practice flow when you are ready.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => setActivePracticeSessionId(selectedSession.id)}
+                    type="button"
+                    variant="primary"
+                  >
+                    {getPracticeActionLabel(selectedSession)}
+                  </Button>
+                </div>
+              </div>
+
+              {activePracticeSessionId === selectedSession.id ? (
+                <InterviewPracticePanel
+                  onClose={() => setActivePracticeSessionId(null)}
+                  sessionId={selectedSession.id}
+                />
+              ) : null}
+
+              <InterviewQuestionList session={selectedSession} />
+            </div>
           ) : null}
         </div>
       )}
