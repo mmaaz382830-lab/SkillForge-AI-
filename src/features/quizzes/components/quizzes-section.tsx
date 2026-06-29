@@ -1,18 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { Badge, type BadgeVariant } from "@/components/ui/badge";
-import { Toast, type ToastVariant } from "@/components/ui/toast";
 import { EmptyState } from "@/components/states/empty-state";
-import { generateQuiz } from "@/lib/quizzes/actions";
-import type {
-  QuizGenerationInput,
-  QuizView,
-} from "@/types/quizzes";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Toast, type ToastVariant } from "@/components/ui/toast";
+import { deleteQuiz, generateQuiz } from "@/lib/quizzes/actions";
 import type { MaterialRoadmapOption } from "@/types/materials";
+import type { QuizGenerationInput, QuizView } from "@/types/quizzes";
 
+import { QuizAttemptPanel } from "./quiz-attempt-panel";
 import { QuizGenerationForm } from "./quiz-generation-form";
 
 type QuizzesSectionProps = {
@@ -38,12 +37,32 @@ function formatDifficulty(value: string): string {
 
 export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
   const router = useRouter();
+  const [generatedQuizzes, setGeneratedQuizzes] = useState<QuizView[]>([]);
+  const [deletedQuizIds, setDeletedQuizIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
 
-  async function handleGenerate(
-    input: QuizGenerationInput,
-  ): Promise<boolean> {
+
+  const visibleQuizzes = useMemo(() => {
+    const mergedQuizzes = [...generatedQuizzes, ...quizzes];
+    const seenQuizIds = new Set<string>();
+
+    return mergedQuizzes.filter((quiz) => {
+      if (deletedQuizIds.has(quiz.id) || seenQuizIds.has(quiz.id)) {
+        return false;
+      }
+
+      seenQuizIds.add(quiz.id);
+      return true;
+    });
+  }, [deletedQuizIds, generatedQuizzes, quizzes]);
+
+  async function handleGenerate(input: QuizGenerationInput): Promise<boolean> {
     setFeedback(null);
     setGenerating(true);
 
@@ -59,13 +78,55 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
       return false;
     }
 
+    setGeneratedQuizzes((currentQuizzes) => [
+      result.data,
+      ...currentQuizzes.filter((quiz) => quiz.id !== result.data.id),
+    ]);
     setFeedback({
       variant: "success",
       title: "Quiz generated and saved.",
-      description: "Review the questions in your quiz list below.",
+      description: "Start practice from your quiz list below.",
     });
     router.refresh();
     return true;
+  }
+
+  async function handleDeleteQuiz(quizId: string) {
+    setFeedback(null);
+    setDeletingQuizId(quizId);
+    setPendingDeleteId(null);
+
+    const result = await deleteQuiz(quizId);
+
+    setDeletingQuizId(null);
+
+    if (!result.ok) {
+      setFeedback({
+        variant: "error",
+        title: "Quiz could not be deleted.",
+      });
+      return;
+    }
+
+    setDeletedQuizIds((currentQuizIds) => {
+      const nextQuizIds = new Set(currentQuizIds);
+      nextQuizIds.add(quizId);
+      return nextQuizIds;
+    });
+    setGeneratedQuizzes((currentQuizzes) =>
+      currentQuizzes.filter((currentQuiz) => currentQuiz.id !== quizId),
+    );
+
+    if (activeQuizId === quizId) {
+      setActiveQuizId(null);
+    }
+
+    setFeedback({
+      variant: "success",
+      title: "Quiz deleted.",
+      description: "Its questions and saved attempts were removed.",
+    });
+    router.refresh();
   }
 
   return (
@@ -74,7 +135,7 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
-              Day 6 generator
+              Day 8 practice
             </p>
             <h2
               className="mt-1 font-heading text-3xl font-black leading-tight"
@@ -83,13 +144,13 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
               Quizzes
             </h2>
             <p className="mt-3 max-w-2xl font-semibold leading-7">
-              Turn processed material into multiple-choice quizzes. Each
-              question includes the correct answer and explanation. Quizzes are
-              tied to your own uploaded material.
+              Turn processed material into multiple-choice quizzes. Saved cards
+              show a short preview, while practice mode keeps the answer key
+              hidden until you submit an attempt.
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <div className="rounded-md border-2 border-black bg-accent-pink px-4 py-3 text-sm font-semibold shadow-brutal-sm">
-                {quizzes.length} {quizzes.length === 1 ? "quiz" : "quizzes"}{" "}
+                {visibleQuizzes.length} {visibleQuizzes.length === 1 ? "quiz" : "quizzes"}{" "}
                 saved
               </div>
               <div className="rounded-md border-2 border-black bg-paper-muted px-4 py-3 text-sm font-semibold shadow-brutal-sm">
@@ -123,124 +184,127 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
         />
       ) : null}
 
-      {quizzes.length === 0 ? (
+      {activeQuizId ? (
+        <QuizAttemptPanel
+          key={activeQuizId}
+          onClose={() => setActiveQuizId(null)}
+          quizId={activeQuizId}
+        />
+      ) : null}
+
+      {visibleQuizzes.length === 0 ? (
         <EmptyState
           accent="pink"
           description={
             materials.length === 0
               ? "Upload and process a material first to generate quizzes."
-              : "Generate a quiz from a completed material. Each question includes the correct answer and an explanation."
+              : "Generate a quiz from a completed material, then start practice mode."
           }
           title="No quizzes yet."
         />
       ) : (
-        <div className="grid gap-6">
-          {quizzes.map((quiz) => (
-            <article className="brutal-card grid gap-4 p-5" key={quiz.id}>
-              {/* Quiz header */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
+        <div className="grid gap-4 md:grid-cols-2">
+          {visibleQuizzes.map((quiz) => {
+            const firstQuestion = quiz.questions[0];
+            const remainingCount = Math.max(quiz.question_count - 1, 0);
+            const isActive = activeQuizId === quiz.id;
+            const isDeleting = deletingQuizId === quiz.id;
+            const deleteDisabled = Boolean(deletingQuizId) || isActive;
+
+            return (
+              <article className="brutal-card grid gap-4 p-5" key={quiz.id}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="pink">{quiz.topic ?? "Quiz"}</Badge>
+                      <Badge
+                        variant={difficultyVariants[quiz.difficulty] ?? "neutral"}
+                      >
+                        {formatDifficulty(quiz.difficulty)}
+                      </Badge>
+                      <Badge variant="neutral">
+                        {quiz.question_count}{" "}
+                        {quiz.question_count === 1 ? "question" : "questions"}
+                      </Badge>
+                    </div>
+                    <h3 className="mt-3 font-heading text-2xl font-black leading-tight">
+                      {quiz.title}
+                    </h3>
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="pink">{quiz.topic ?? "Quiz"}</Badge>
-                    <Badge
-                      variant={
-                        difficultyVariants[quiz.difficulty] ?? "neutral"
-                      }
+                    <Button
+                      disabled={isDeleting}
+                      onClick={() => {
+                        setActiveQuizId(quiz.id);
+                        setFeedback(null);
+                        setPendingDeleteId(null);
+                      }}
+                      variant={isActive ? "highlight" : "primary"}
                     >
-                      {formatDifficulty(quiz.difficulty)}
-                    </Badge>
-                    <Badge variant="neutral">
-                      {quiz.question_count}{" "}
-                      {quiz.question_count === 1 ? "question" : "questions"}
-                    </Badge>
-                  </div>
-                  <h3 className="mt-3 font-heading text-2xl font-black leading-tight">
-                    {quiz.title}
-                  </h3>
-                </div>
-              </div>
-
-              {/* Question preview list */}
-              <div className="grid gap-3">
-                {quiz.questions.map((q) => (
-                  <div
-                    className="rounded-lg border-2 border-black bg-paper-base p-4 shadow-brutal-sm"
-                    key={q.id}
-                  >
-                    {/* Question meta row */}
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="neutral">
-                          {q.topic ?? quiz.topic ?? "Question"}
-                        </Badge>
-                        <Badge
-                          variant={
-                            difficultyVariants[q.difficulty] ?? "neutral"
-                          }
+                      {isActive ? "Practice open" : "Start quiz"}
+                    </Button>
+                    {pendingDeleteId === quiz.id ? (
+                      <>
+                        <Button
+                          disabled={isDeleting}
+                          loading={isDeleting}
+                          onClick={() => void handleDeleteQuiz(quiz.id)}
+                          variant="danger"
                         >
-                          {formatDifficulty(q.difficulty)}
-                        </Badge>
-                      </div>
-                      <span className="text-xs font-black text-zinc-500">
-                        Q{q.order_index} / {quiz.question_count}
-                      </span>
-                    </div>
-
-                    {/* Question text */}
-                    <p className="font-heading text-lg font-black leading-snug">
-                      {q.question}
-                    </p>
-
-                    {/* Options */}
-                    <div
-                      className="mt-3 grid gap-2"
-                      role="list"
-                      aria-label="Answer options"
-                    >
-                      {q.options.map((option, i) => {
-                        const isCorrect = option === q.correct_answer;
-
-                        return (
-                          <div
-                            key={`${q.id}-opt-${i}`}
-                            role="listitem"
-                            className={`flex items-start gap-3 rounded-md border-2 border-black px-3 py-2.5 text-sm font-semibold shadow-brutal-sm ${
-                              isCorrect
-                                ? "bg-accent-green"
-                                : "bg-paper-muted"
-                            }`}
-                            aria-label={`${isCorrect ? "Correct: " : ""}Option ${String.fromCharCode(65 + i)}: ${option}`}
-                          >
-                            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 border-black bg-white text-xs font-black">
-                              {String.fromCharCode(65 + i)}
-                            </span>
-                            <span className="leading-relaxed">{option}</span>
-                            {isCorrect ? (
-                              <span className="ml-auto shrink-0 rounded border border-black bg-white px-1.5 py-0.5 text-xs font-black">
-                                ✓
-                              </span>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Explanation */}
-                    <div className="mt-3 rounded-md border-2 border-black bg-accent-pink px-3 py-2.5">
-                      <p className="text-xs font-black uppercase text-zinc-600">
-                        Explanation
-                      </p>
-                      <p className="mt-1 text-sm font-semibold leading-6">
-                        {q.explanation}
-                      </p>
-                    </div>
+                          Confirm delete
+                        </Button>
+                        <Button
+                          disabled={isDeleting}
+                          onClick={() => setPendingDeleteId(null)}
+                          variant="secondary"
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        disabled={deleteDisabled}
+                        onClick={() => {
+                          setPendingDeleteId(quiz.id);
+                          setFeedback(null);
+                        }}
+                        variant="danger"
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
-                ))}
-              </div>
-            </article>
-          ))}
+                </div>
+
+                <div className="rounded-lg border-2 border-black bg-paper-base p-4 shadow-brutal-sm">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-black uppercase text-zinc-500">
+                      Preview
+                    </span>
+                    <span className="text-xs font-black text-zinc-500">
+                      {quiz.questions.length} loaded
+                    </span>
+                  </div>
+                  <p className="font-heading text-lg font-black leading-snug">
+                    {firstQuestion?.question ?? "Questions are ready for practice."}
+                  </p>
+                  {remainingCount > 0 ? (
+                    <p className="mt-3 text-sm font-semibold text-zinc-600">
+                      +{remainingCount} more {remainingCount === 1 ? "question" : "questions"} in this quiz.
+                    </p>
+                  ) : null}
+                  {isActive ? (
+                    <p className="mt-3 rounded-md border-2 border-black bg-accent-yellow px-3 py-2 text-sm font-black shadow-brutal-sm">
+                      Close practice before deleting this quiz.
+                    </p>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
   );
 }
+

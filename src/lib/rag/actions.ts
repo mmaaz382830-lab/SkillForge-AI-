@@ -943,10 +943,9 @@ export async function softDeleteChatSession(
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .rpc("soft_delete_chat_session", {
-      p_session_id: id,
-    });
+  const { error } = await supabase.rpc("soft_delete_chat_session", {
+    p_session_id: id,
+  });
 
   if (error) {
     logChatPersistenceError({

@@ -24,11 +24,69 @@ export type QuizQuestion = {
   difficulty: DifficultyLevel;
   order_index: number;
   created_at: string;
-  updated_at: string;
 };
 
+export type QuizAttempt = {
+  id: string;
+  quiz_id: string;
+  user_id: string;
+  score: number;
+  total_questions: number;
+  correct_count: number;
+  answers: Record<string, string>;
+  started_at: string;
+  completed_at: string | null;
+};
+
+export type SanitizedQuizQuestionForAttempt = Pick<
+  QuizQuestion,
+  | "id"
+  | "quiz_id"
+  | "question"
+  | "options"
+  | "topic"
+  | "difficulty"
+  | "order_index"
+>;
+
 export type QuizView = Omit<Quiz, "user_id"> & {
-  questions: Array<Omit<QuizQuestion, "user_id">>;
+  questions: SanitizedQuizQuestionForAttempt[];
+};
+
+export type SanitizedQuizForAttempt = Omit<Quiz, "user_id"> & {
+  questions: SanitizedQuizQuestionForAttempt[];
+};
+
+export type QuizAttemptSubmissionInput = {
+  quizId: string;
+  answers: Record<string, string>;
+};
+
+export type QuizAttemptSummary = {
+  id: string;
+  quiz_id: string;
+  quiz_title: string;
+  score: number;
+  total_questions: number;
+  correct_count: number;
+  completed_at: string | null;
+  progress_warning?: string;
+};
+
+export type QuizAttemptReviewItem = {
+  question_id: string;
+  question: string;
+  selected_answer: string | null;
+  correct_answer: string;
+  is_correct: boolean;
+  explanation: string | null;
+  topic: string | null;
+  difficulty: DifficultyLevel;
+};
+
+export type QuizAttemptReview = QuizAttemptSummary & {
+  weak_topics: string[];
+  review_items: QuizAttemptReviewItem[];
 };
 
 export type QuizGenerationInput = {
@@ -47,3 +105,7 @@ export type QuizActionResult<T = unknown> =
       ok: false;
       error: string;
     };
+
+
+
+

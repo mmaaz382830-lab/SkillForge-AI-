@@ -1,11 +1,21 @@
+import { z } from "zod";
+
 import type { DifficultyLevel } from "@/types/app";
-import type { QuizGenerationInput } from "@/types/quizzes";
+import type {
+  QuizAttemptSubmissionInput,
+  QuizGenerationInput,
+} from "@/types/quizzes";
 
 type ValidatedQuizGenerationInput = {
   material_id: string;
   topic: string | null;
   difficulty: DifficultyLevel;
   question_count: number;
+};
+
+type ValidatedQuizAttemptSubmissionInput = {
+  quizId: string;
+  answers: Record<string, string>;
 };
 
 type ValidationResult<T> =
@@ -23,6 +33,11 @@ const DIFFICULTIES = new Set<DifficultyLevel>([
   "intermediate",
   "advanced",
 ]);
+
+const submitQuizAttemptInputSchema = z.object({
+  quizId: z.string().uuid(),
+  answers: z.record(z.string().uuid(), z.string().trim().min(1)),
+});
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -76,6 +91,41 @@ function validateRequiredUuid(
   };
 }
 
+export function validateQuizAttemptSubmissionInput(
+  input: QuizAttemptSubmissionInput,
+): ValidationResult<ValidatedQuizAttemptSubmissionInput> {
+  const parsed = submitQuizAttemptInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Please answer at least one question.",
+    };
+  }
+
+  const answers = Object.fromEntries(
+    Object.entries(parsed.data.answers).map(([questionId, answer]) => [
+      questionId,
+      answer.trim(),
+    ]),
+  );
+
+  if (Object.keys(answers).length === 0) {
+    return {
+      ok: false,
+      error: "Please answer at least one question.",
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      quizId: parsed.data.quizId,
+      answers,
+    },
+  };
+}
+
 export function validateQuizGenerationInput(
   input: QuizGenerationInput,
 ): ValidationResult<ValidatedQuizGenerationInput> {
@@ -110,3 +160,4 @@ export function validateQuizGenerationInput(
     },
   };
 }
+

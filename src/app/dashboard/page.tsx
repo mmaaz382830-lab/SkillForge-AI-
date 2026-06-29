@@ -78,7 +78,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <>
           <section
             aria-label="Dashboard progress summary"
-            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
           >
             <DashboardStatCard
               accent="yellow"
@@ -106,6 +106,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               value={dashboardResult.data.completed_task_count}
             />
             <DashboardStatCard
+              accent="pink"
+              label="Quiz attempts"
+              value={dashboardResult.data.quiz_attempt_count}
+            />
+            <DashboardStatCard
+              accent="pink"
+              label="Latest quiz score"
+              suffix={dashboardResult.data.latest_quiz_score == null ? undefined : "%"}
+              value={dashboardResult.data.latest_quiz_score ?? "-"}
+            />
+            <DashboardStatCard
+              accent="green"
+              label="Interviews completed"
+              value={dashboardResult.data.completed_interview_count}
+            />
+            <DashboardStatCard
               accent="green"
               label="Overall roadmap progress"
               suffix="%"
@@ -116,7 +132,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {dashboardResult.data.learning_goal_count === 0 &&
           dashboardResult.data.material_count === 0 &&
           dashboardResult.data.roadmap_count === 0 &&
-          dashboardResult.data.roadmap_task_count === 0 ? (
+          dashboardResult.data.roadmap_task_count === 0 &&
+          dashboardResult.data.quiz_attempt_count === 0 &&
+          dashboardResult.data.completed_interview_count === 0 ? (
             <DashboardEmptyPanel
               action={
                 <Link

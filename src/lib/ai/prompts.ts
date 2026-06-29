@@ -2,6 +2,9 @@ import type { AiDifficulty } from "@/lib/ai/schemas";
 
 const MAX_MATERIAL_CONTEXT_CHARS = 12_000;
 
+// Answer feedback only needs compact question context; keep it much smaller than material prompts.
+const MAX_INTERVIEW_ANSWER_CHARS = 8_000;
+
 type BasePromptInput = {
   difficulty?: AiDifficulty;
   materialContext?: string;
@@ -29,6 +32,13 @@ export type InterviewQuestionsPromptInput = BasePromptInput & {
   questionCount?: number;
 };
 
+export type InterviewFeedbackPromptInput = {
+  question: string;
+  expectedAnswerPoints: string[];
+  userAnswer: string;
+  difficulty?: AiDifficulty;
+};
+
 function truncateContext(text: string | undefined): string | null {
   const trimmed = text?.trim();
 
@@ -37,6 +47,10 @@ function truncateContext(text: string | undefined): string | null {
   }
 
   return trimmed.slice(0, MAX_MATERIAL_CONTEXT_CHARS);
+}
+
+function truncateInterviewAnswer(text: string): string {
+  return text.trim().slice(0, MAX_INTERVIEW_ANSWER_CHARS);
 }
 
 function formatMaterialContext(materialContext: string | undefined): string {
@@ -190,5 +204,44 @@ Return JSON with this exact shape:
       "topic": "Question topic"
     }
   ]
+}`;
+}
+
+export function buildInterviewFeedbackPrompt(
+  input: InterviewFeedbackPromptInput,
+): string {
+  const expectedPoints = input.expectedAnswerPoints.length > 0
+    ? input.expectedAnswerPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")
+    : "No expected answer points were stored. Judge the answer against the question directly.";
+
+  return `You are SkillForge AI, a constructive technical interview feedback assistant.
+
+Interview question:
+${input.question}
+
+Expected answer points:
+${expectedPoints}
+
+User answer:
+${truncateInterviewAnswer(input.userAnswer)}
+
+Difficulty: ${formatDifficulty(input.difficulty)}
+
+${jsonOnlyRules()}
+Feedback rules:
+- Be constructive, direct, and practical.
+- Do not be harsh.
+- Do not overpraise weak answers.
+- Do not pretend missing concepts were covered.
+- Mention concrete improvements the learner can practice next.
+- Score must be a number from 0 to 10.
+
+Return JSON with this exact shape:
+{
+  "strengths": ["What the answer did well"],
+  "missing_points": ["What important point was missing or unclear"],
+  "improved_answer": "A concise stronger answer the learner can study",
+  "score": 7,
+  "next_practice_tip": "One practical thing to improve next"
 }`;
 }
