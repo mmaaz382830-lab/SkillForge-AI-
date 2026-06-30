@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui";
 import { adminNavigation, dashboardNavigation } from "@/config/navigation";
+import { getCurrentAdminProfile } from "@/lib/admin/access";
 import { cn } from "@/lib/utils/cn";
 import { AppLogo } from "./app-logo";
 
@@ -9,10 +9,13 @@ type DashboardSidebarProps = {
   className?: string;
 };
 
-export function DashboardSidebar({
+export async function DashboardSidebar({
   activePath,
   className,
 }: DashboardSidebarProps) {
+  const adminProfile = await getCurrentAdminProfile();
+  const isAdmin = !!adminProfile;
+
   return (
     <aside
       className={cn(
@@ -44,18 +47,32 @@ export function DashboardSidebar({
             })}
           </div>
         </nav>
-        <div className="grid gap-2 border-t-2 border-black pt-4">
-          <Badge variant="blue">Visual placeholder</Badge>
-          {adminNavigation.map((item) => (
-            <Link
-              className="w-fit rounded-md border-2 border-black bg-paper-base px-3 py-2 text-sm font-black no-underline shadow-brutal-sm hover:bg-accent-yellow"
-              href={item.href}
-              key={item.href}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
+        {isAdmin && (
+          <div className="grid gap-2 border-t-2 border-black pt-4">
+            <span className="text-xs font-black uppercase tracking-wider text-zinc-500 px-1">
+              Admin Control Layer
+            </span>
+            <div className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
+              {adminNavigation.map((item) => {
+                const isActive = activePath === item.href;
+
+                return (
+                  <Link
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "whitespace-nowrap rounded-md border-2 border-black px-3 py-2 text-sm font-black no-underline shadow-brutal-sm hover:bg-accent-yellow lg:w-full",
+                      isActive ? "bg-accent-yellow" : "bg-paper-base",
+                    )}
+                    href={item.href}
+                    key={item.href}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

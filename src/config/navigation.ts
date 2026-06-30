@@ -20,6 +20,10 @@ export const dashboardNavigation = [
 ] as const;
 
 export const adminNavigation = [
-  { label: "Admin", href: adminRoutes.admin },
+  { label: "Overview", href: adminRoutes.admin },
+  { label: "Users", href: adminRoutes.users },
+  { label: "Usage", href: adminRoutes.usage },
+  { label: "Logs", href: adminRoutes.logs },
+  { label: "Back to Dashboard", href: dashboardRoutes.dashboard },
 ] as const;
 

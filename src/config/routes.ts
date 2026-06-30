@@ -25,6 +25,7 @@ export const dashboardRoutes = {
 export const adminRoutes = {
   admin: "/admin",
   users: "/admin/users",
+  usage: "/admin/usage",
   logs: "/admin/logs",
 } as const;
 

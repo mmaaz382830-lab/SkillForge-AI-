@@ -4,7 +4,7 @@ import { dashboardRoutes } from "@/config/routes";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { UsageCard } from "@/features/dashboard/components/usage-card";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
@@ -43,48 +43,30 @@ export default async function SettingsPage() {
       activePath={dashboardRoutes.settings}
     >
       {/* Plan / usage card */}
-      <section className="brutal-card p-5 sm:p-6" aria-label="Plan and usage">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wider text-zinc-500">
-              Current plan
+      <section className="grid gap-4" aria-label="Plan and usage">
+        <div className="brutal-card p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-zinc-500">
+                Current plan
+              </p>
+              <h2 className="font-heading text-2xl font-black">
+                {formattedPlan} plan
+              </h2>
+            </div>
+            <div className="flex gap-2">
+              <Badge variant="yellow">{formattedPlan}</Badge>
+              <Badge variant="blue">{profile?.role ?? "user"}</Badge>
+            </div>
+          </div>
+          <div className="rounded-md border-2 border-black bg-paper-muted px-4 py-3">
+            <p className="text-sm font-semibold">
+              Plan changes are admin-managed for this MVP. Usage below is
+              calculated from successful AI actions in usage logs.
             </p>
-            <h2 className="font-heading text-2xl font-black">
-              {formattedPlan} plan
-            </h2>
-          </div>
-          <div className="flex gap-2">
-            <Badge variant="yellow">{formattedPlan}</Badge>
-            <Badge variant="blue">{profile?.role ?? "user"}</Badge>
           </div>
         </div>
-        <div className="mb-5 grid gap-4">
-          <Progress
-            label="AI generations"
-            value={3}
-            max={10}
-            description="3 of 10 monthly AI generations used."
-          />
-          <Progress
-            label="Materials"
-            value={1}
-            max={5}
-            indicatorClassName="bg-accent-blue"
-            description="1 of 5 free material uploads used."
-          />
-        </div>
-        <div className="rounded-md border-2 border-black bg-paper-muted px-4 py-3">
-          <p className="text-sm font-semibold">
-            <span className="font-black">Pro plan</span> — unlimited AI
-            generations, up to 50 materials, priority support. Coming in later
-            phases.
-          </p>
-        </div>
-        <div className="mt-4">
-          <Button type="button" variant="highlight" aria-disabled="true">
-            Upgrade to Pro
-          </Button>
-        </div>
+        <UsageCard />
       </section>
 
       {/* Preferences card */}

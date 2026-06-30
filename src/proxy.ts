@@ -113,7 +113,7 @@ export async function proxy(request: NextRequest) {
     if (profile?.role !== "admin") {
       return createRedirectResponse(
         request,
-        `${dashboardRoutes.dashboard}?authError=admin-required`,
+        `${dashboardRoutes.dashboard}?auth=required&reason=admin`,
         response,
       );
     }
