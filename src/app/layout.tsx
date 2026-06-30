@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { siteConfig } from "@/config/site";
 import "./globals.css";
 
@@ -14,7 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
