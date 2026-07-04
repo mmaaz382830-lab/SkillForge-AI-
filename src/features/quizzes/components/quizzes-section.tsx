@@ -17,6 +17,7 @@ import { QuizGenerationForm } from "./quiz-generation-form";
 type QuizzesSectionProps = {
   quizzes: QuizView[];
   materials: MaterialRoadmapOption[];
+  defaultQuizDifficulty?: QuizGenerationInput["difficulty"];
 };
 
 type Feedback = {
@@ -35,7 +36,11 @@ function formatDifficulty(value: string): string {
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
-export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
+export function QuizzesSection({
+  quizzes,
+  materials,
+  defaultQuizDifficulty = "beginner",
+}: QuizzesSectionProps) {
   const router = useRouter();
   const [generatedQuizzes, setGeneratedQuizzes] = useState<QuizView[]>([]);
   const [deletedQuizIds, setDeletedQuizIds] = useState<Set<string>>(
@@ -46,7 +51,6 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
-
 
   const visibleQuizzes = useMemo(() => {
     const mergedQuizzes = [...generatedQuizzes, ...quizzes];
@@ -135,7 +139,7 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
-              Day 8 practice
+              Quiz practice
             </p>
             <h2
               className="mt-1 font-heading text-3xl font-black leading-tight"
@@ -171,6 +175,7 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
               materials={materials}
               onSubmit={handleGenerate}
               pending={generating}
+              defaultDifficulty={defaultQuizDifficulty}
             />
           </div>
         </div>
@@ -307,4 +312,3 @@ export function QuizzesSection({ quizzes, materials }: QuizzesSectionProps) {
     </section>
   );
 }
-

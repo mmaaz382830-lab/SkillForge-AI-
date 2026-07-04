@@ -7,7 +7,7 @@ export const AI_SAFE_MESSAGES = {
   serviceUnavailable:
     "AI service is temporarily unavailable. Please try again later.",
   usageLimitReached:
-    "Usage limit reached. Please try again later or upgrade your plan.",
+    "You reached the limit for now. Please try again later.",
   missingGeminiApiKey: "Missing GEMINI_API_KEY. AI generation is unavailable.",
 } as const;
 
@@ -70,10 +70,10 @@ export class AiInvalidOutputError extends Error {
 export class AiUsageLimitError extends Error {
   readonly safeMessage: string;
 
-  constructor() {
-    super(AI_SAFE_MESSAGES.usageLimitReached);
+  constructor(message: string = AI_SAFE_MESSAGES.usageLimitReached) {
+    super(message);
     this.name = "AiUsageLimitError";
-    this.safeMessage = AI_SAFE_MESSAGES.usageLimitReached;
+    this.safeMessage = message;
   }
 }
 

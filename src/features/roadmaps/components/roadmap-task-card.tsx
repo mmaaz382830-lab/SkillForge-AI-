@@ -79,7 +79,7 @@ export function RoadmapTaskCard({
   return (
     <article
       className={cn(
-        "brutal-card grid gap-4 p-4 sm:p-5",
+        "brutal-card grid gap-5 p-5 sm:p-6",
         completed && "bg-accent-green",
       )}
     >
@@ -93,118 +93,113 @@ export function RoadmapTaskCard({
         />
       ) : (
         <>
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="flex min-w-0 gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border-2 border-black bg-accent-yellow font-heading text-lg font-black shadow-brutal-sm">
-                {task.order_index}
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={statusVariants[task.status]}>
-                    {statusCopy[task.status]}
-                  </Badge>
-                  {task.estimated_time ? (
-                    <Badge variant="blue">{task.estimated_time}</Badge>
-                  ) : null}
-                </div>
-                <h3
-                  className={cn(
-                    "mt-3 font-heading text-2xl font-black leading-tight",
-                    completed && "line-through decoration-4",
-                  )}
-                >
-                  {task.title}
-                </h3>
-                {task.description ? (
-                  <p className="mt-2 text-sm font-semibold leading-6 text-zinc-700">
-                    {task.description}
-                  </p>
-                ) : null}
-                {completed && task.completed_at ? (
-                  <p className="mt-2 text-xs font-black uppercase">
-                    Completed {formatCompletedDate(task.completed_at)}
-                  </p>
+          <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border-2 border-black bg-accent-yellow font-heading text-xl font-black shadow-brutal-sm">
+              {task.order_index}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={statusVariants[task.status]}>
+                  {statusCopy[task.status]}
+                </Badge>
+                {task.estimated_time ? (
+                  <Badge variant="blue">{task.estimated_time}</Badge>
                 ) : null}
               </div>
+              <h3
+                className={cn(
+                  "mt-3 break-words font-heading text-2xl font-black leading-tight",
+                  completed && "line-through decoration-4",
+                )}
+              >
+                {task.title}
+              </h3>
+              {task.description ? (
+                <p className="mt-3 max-w-3xl text-base font-semibold leading-7 text-zinc-700">
+                  {task.description}
+                </p>
+              ) : null}
+              {completed && task.completed_at ? (
+                <p className="mt-3 text-xs font-black uppercase">
+                  Completed {formatCompletedDate(task.completed_at)}
+                </p>
+              ) : null}
             </div>
           </div>
 
-          <div className="rounded-lg border-2 border-black bg-paper-base p-3 shadow-brutal-sm">
-            <p className="text-xs font-black uppercase text-zinc-500">
-              Quick status
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(["todo", "in_progress", "completed"] as const).map((status) => (
-                <Button
-                  disabled={
-                    saving || deleting || updatingStatus || task.status === status
-                  }
-                  key={status}
-                  onClick={() => onStatusUpdate(task.id, status)}
-                  size="sm"
-                  type="button"
-                  variant={status === "completed" ? "highlight" : "secondary"}
-                >
-                  {statusPending === status
-                    ? "Updating status..."
-                    : statusCopy[status]}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {confirmingDelete ? (
-            <div
-              className="rounded-lg border-2 border-black bg-accent-pink p-4 shadow-brutal-sm"
-              role="alert"
-            >
-              <p className="font-black">Delete this task?</p>
-              <p className="mt-1 text-sm font-semibold leading-6">
-                This removes the task from the roadmap checklist.
+          <div className="grid gap-3 rounded-lg border-2 border-black bg-paper-base p-4 shadow-brutal-sm lg:grid-cols-[1fr_auto] lg:items-center">
+            <div>
+              <p className="text-xs font-black uppercase text-zinc-500">
+                Status controls
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(["todo", "in_progress", "completed"] as const).map((status) => (
+                  <Button
+                    disabled={
+                      saving || deleting || updatingStatus || task.status === status
+                    }
+                    key={status}
+                    onClick={() => onStatusUpdate(task.id, status)}
+                    size="sm"
+                    type="button"
+                    variant={status === "completed" ? "highlight" : "secondary"}
+                  >
+                    {statusPending === status ? "Updating..." : statusCopy[status]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {confirmingDelete ? (
+              <div
+                className="rounded-lg border-2 border-black bg-accent-pink p-3 shadow-brutal-sm"
+                role="alert"
+              >
+                <p className="font-black">Delete this task?</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    disabled={deleting}
+                    onClick={handleDelete}
+                    size="sm"
+                    type="button"
+                    variant="danger"
+                  >
+                    {deleting ? "Deleting..." : "Delete"}
+                  </Button>
+                  <Button
+                    disabled={deleting}
+                    onClick={() => setConfirmingDelete(false)}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    Keep
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2 lg:justify-end">
                 <Button
-                  disabled={deleting}
-                  onClick={handleDelete}
-                  size="sm"
-                  type="button"
-                  variant="danger"
-                >
-                  {deleting ? "Deleting task..." : "Delete task"}
-                </Button>
-                <Button
-                  disabled={deleting}
-                  onClick={() => setConfirmingDelete(false)}
+                  disabled={saving || deleting || updatingStatus}
+                  onClick={() => setEditing(true)}
                   size="sm"
                   type="button"
                   variant="secondary"
                 >
-                  Keep task
+                  Edit
+                </Button>
+                <Button
+                  disabled={saving || deleting || updatingStatus}
+                  onClick={() => setConfirmingDelete(true)}
+                  size="sm"
+                  type="button"
+                  variant="danger"
+                >
+                  Delete
                 </Button>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={saving || deleting || updatingStatus}
-                onClick={() => setEditing(true)}
-                size="sm"
-                type="button"
-                variant="secondary"
-              >
-                Edit
-              </Button>
-              <Button
-                disabled={saving || deleting || updatingStatus}
-                onClick={() => setConfirmingDelete(true)}
-                size="sm"
-                type="button"
-                variant="danger"
-              >
-                Delete
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </article>

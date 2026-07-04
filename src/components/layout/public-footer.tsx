@@ -10,7 +10,7 @@ export function PublicFooter() {
     <footer className="border-t-2 border-black bg-paper-muted">
       <Container className="grid gap-6 py-8 md:grid-cols-[1.5fr_1fr] md:items-start">
         <div className="grid gap-3">
-          <AppLogo href={publicRoutes.home} />
+          <AppLogo href={publicRoutes.home} markSize="sm" />
           <p className="font-medium leading-7">
             {siteConfig.description} Built for studying from notes, practicing
             interviews, and tracking learning progress.
@@ -22,7 +22,7 @@ export function PublicFooter() {
         >
           {publicNavigation.map((item) => (
             <Link
-              className="rounded-md px-3 py-2 text-sm font-black no-underline hover:bg-accent-yellow"
+              className="rounded-md px-3 py-2 text-sm font-black no-underline transition-all duration-200 hover-highlight-yellow"
               href={item.href}
               key={item.href}
             >
@@ -34,3 +34,4 @@ export function PublicFooter() {
     </footer>
   );
 }
+

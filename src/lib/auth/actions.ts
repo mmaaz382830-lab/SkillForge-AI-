@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -240,6 +241,133 @@ export async function signUpWithEmailPasswordFormAction(
   });
 }
 
+
+export async function updateDisplayNameFormAction(
+  _previousState: AuthActionResult,
+  formData: FormData,
+): Promise<AuthActionResult> {
+  const fullName = sanitizeFullName(readFormString(formData, "fullName"));
+
+  if (!fullName) {
+    return {
+      success: false,
+      message: "Display name is required.",
+    };
+  }
+
+  if (fullName.length > 80) {
+    return {
+      success: false,
+      message: AUTH_MESSAGES.invalidFullName,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return {
+      success: false,
+      message: AUTH_MESSAGES.sessionExpired,
+    };
+  }
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ full_name: fullName })
+    .eq("id", user.id);
+
+  if (profileError) {
+    return {
+      success: false,
+      message: AUTH_MESSAGES.unknown,
+    };
+  }
+
+  await supabase.auth.updateUser({
+    data: {
+      full_name: fullName,
+      name: fullName,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/profile");
+  revalidatePath("/dashboard/settings");
+
+  return {
+    success: true,
+    message: "Display name updated.",
+  };
+}
+
+function isDifficultyPreference(value: string): value is "beginner" | "intermediate" | "advanced" {
+  return ["beginner", "intermediate", "advanced"].includes(value);
+}
+
+export async function updateDifficultyPreferencesFormAction(
+  _previousState: AuthActionResult,
+  formData: FormData,
+): Promise<AuthActionResult> {
+  const defaultQuizDifficulty = readFormString(
+    formData,
+    "defaultQuizDifficulty",
+  );
+  const defaultRoadmapDifficulty = readFormString(
+    formData,
+    "defaultRoadmapDifficulty",
+  );
+
+  if (
+    !isDifficultyPreference(defaultQuizDifficulty) ||
+    !isDifficultyPreference(defaultRoadmapDifficulty)
+  ) {
+    return {
+      success: false,
+      message: "Choose valid difficulty preferences.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return {
+      success: false,
+      message: AUTH_MESSAGES.sessionExpired,
+    };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      default_quiz_difficulty: defaultQuizDifficulty,
+      default_roadmap_difficulty: defaultRoadmapDifficulty,
+    })
+    .eq("id", user.id);
+
+  if (error) {
+    return {
+      success: false,
+      message: AUTH_MESSAGES.unknown,
+    };
+  }
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/roadmaps");
+  revalidatePath("/dashboard/quizzes");
+
+  return {
+    success: true,
+    message: "Preferences saved.",
+  };
+}
 export async function signOut(): Promise<AuthActionResult> {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signOut();

@@ -336,7 +336,7 @@ export function FlashcardsSection({ decks, materials }: FlashcardsSectionProps) 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
-              Day 6 generator
+              Flashcard studio
             </p>
             <h2
               className="mt-1 font-heading text-3xl font-black leading-tight"

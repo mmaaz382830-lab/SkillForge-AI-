@@ -13,7 +13,13 @@ import {
   AiUsageLimitError,
   getSafeAiErrorMessage,
 } from "@/lib/ai/errors";
-import { assertAiUsageAllowed, logAiUsageEvent } from "@/lib/ai/usage";
+import {
+  LIMIT_REACHED_MESSAGE,
+  assertAiUsageAllowed,
+  logAiUsageEvent,
+} from "@/lib/ai/usage";
+import { logApiEvent, logErrorEvent } from "@/lib/logging/actions";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { MaterialActionResult } from "@/types/materials";
 
@@ -52,6 +58,7 @@ type AnswerQuestionFromMaterialInput = {
   materialId: string;
   question: string;
   topK?: number;
+  recordSuccessUsage?: boolean;
 };
 
 type RagAnswerResult = {
@@ -60,6 +67,18 @@ type RagAnswerResult = {
   sources: RagSourceSnippet[];
   source_chunk_ids: string[];
   insufficient_context: boolean;
+};
+
+type RagAnswerUsage = {
+  provider?: "gemini";
+  model?: string | null;
+  requested_count: number | null;
+  chunk_count: number;
+  retry_count: number;
+};
+
+type InternalRagAnswerResult = RagAnswerResult & {
+  usage?: RagAnswerUsage;
 };
 
 type CreateChatSessionInput = {
@@ -122,6 +141,57 @@ function logMaterialIndexingError(input: {
   });
 }
 
+async function logRagActionSuccess(input: {
+  route: "indexMaterialForRag" | "askRagChatQuestion";
+  userId: string;
+  featureType: "embeddings" | "chat";
+  durationMs?: number;
+  metadata: Record<string, unknown>;
+}) {
+  await logApiEvent({
+    userId: input.userId,
+    route: input.route,
+    method: "server_action",
+    featureType: input.featureType,
+    status: "success",
+    durationMs: input.durationMs,
+    metadata: input.metadata,
+  });
+}
+
+async function logRagActionError(input: {
+  route: "indexMaterialForRag" | "askRagChatQuestion";
+  userId: string;
+  featureType: "embeddings" | "chat";
+  durationMs?: number;
+  errorCode: string;
+  safeMessage: string;
+  metadata: Record<string, unknown>;
+}) {
+  const metadata = {
+    ...input.metadata,
+    error_code: input.errorCode,
+  };
+
+  await logApiEvent({
+    userId: input.userId,
+    route: input.route,
+    method: "server_action",
+    featureType: input.featureType,
+    status: "error",
+    durationMs: input.durationMs,
+    metadata,
+  });
+  await logErrorEvent({
+    userId: input.userId,
+    category: input.featureType === "embeddings" ? "material_indexing" : "rag_chat",
+    safeMessage: input.safeMessage,
+    source: input.route,
+    featureType: input.featureType,
+    severity: "error",
+    metadata,
+  });
+}
 function getEmbeddingErrorCode(error: unknown): string {
   if (error instanceof AiProviderError) {
     return `AI_PROVIDER_${error.code.toUpperCase()}`;
@@ -195,6 +265,43 @@ export async function indexMaterialForRag(
   }
 
   const startedAt = Date.now();
+
+  try {
+    const rateLimit = await checkRateLimit("embeddings", {
+      userId: user.data,
+      route: "indexMaterialForRag",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
+    await assertAiUsageAllowed({
+      userId: user.data,
+      featureType: "embeddings",
+      route: "indexMaterialForRag",
+      metadata: {
+        material_id: id,
+        requested_count: chunks.length,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AiUsageLimitError) {
+      return {
+        ok: false,
+        error: error.safeMessage,
+      };
+    }
+
+    return {
+      ok: false,
+      error: "Could not index material. Please try again.",
+    };
+  }
+
   let embeddings;
 
   try {
@@ -221,6 +328,19 @@ export async function indexMaterialForRag(
         requested_count: chunks.length,
         duration_ms: Date.now() - startedAt,
         error_code: errorCode,
+      },
+    });
+    await logRagActionError({
+      route: "indexMaterialForRag",
+      userId: user.data,
+      featureType: "embeddings",
+      durationMs: Date.now() - startedAt,
+      errorCode,
+      safeMessage: getSafeAiErrorMessage(error),
+      metadata: {
+        material_id: id,
+        requested_count: chunks.length,
+        step: "embedding",
       },
     });
 
@@ -259,6 +379,19 @@ export async function indexMaterialForRag(
       userId: user.data,
       error: deleteError,
     });
+    await logRagActionError({
+      route: "indexMaterialForRag",
+      userId: user.data,
+      featureType: "embeddings",
+      durationMs: Date.now() - startedAt,
+      errorCode: "MATERIAL_CHUNK_DELETE_FAILED",
+      safeMessage: "Material chunk cleanup failed.",
+      metadata: {
+        material_id: id,
+        requested_count: chunks.length,
+        step: "delete-old",
+      },
+    });
     return {
       ok: false,
       error: "Could not index material. Please try again.",
@@ -287,6 +420,19 @@ export async function indexMaterialForRag(
         error_code: "MATERIAL_CHUNK_SAVE_FAILED",
       },
     });
+    await logRagActionError({
+      route: "indexMaterialForRag",
+      userId: user.data,
+      featureType: "embeddings",
+      durationMs: Date.now() - startedAt,
+      errorCode: "MATERIAL_CHUNK_SAVE_FAILED",
+      safeMessage: "Material chunk save failed.",
+      metadata: {
+        material_id: id,
+        requested_count: chunks.length,
+        step: "insert",
+      },
+    });
     return {
       ok: false,
       error: "Could not index material. Please try again.",
@@ -307,6 +453,19 @@ export async function indexMaterialForRag(
       userId: user.data,
       error: updateError,
     });
+    await logRagActionError({
+      route: "indexMaterialForRag",
+      userId: user.data,
+      featureType: "embeddings",
+      durationMs: Date.now() - startedAt,
+      errorCode: "MATERIAL_CHUNK_COUNT_UPDATE_FAILED",
+      safeMessage: "Material chunk count update failed.",
+      metadata: {
+        material_id: id,
+        requested_count: rows.length,
+        step: "update-count",
+      },
+    });
     return {
       ok: false,
       error: "Material was indexed, but the chunk count could not be updated.",
@@ -322,6 +481,19 @@ export async function indexMaterialForRag(
       material_id: id,
       requested_count: rows.length,
       duration_ms: Date.now() - startedAt,
+    },
+  });
+
+  await logRagActionSuccess({
+    route: "indexMaterialForRag",
+    userId: user.data,
+    featureType: "embeddings",
+    durationMs: Date.now() - startedAt,
+    metadata: {
+      material_id: id,
+      chunk_count: rows.length,
+      embedding_dimension: GEMINI_EMBEDDING_DIMENSION,
+      embedding_model: DEFAULT_GEMINI_EMBEDDING_MODEL,
     },
   });
 
@@ -401,7 +573,7 @@ function normalizeTopK(topK: number | undefined): number | undefined {
 
 export async function answerQuestionFromMaterial(
   input: AnswerQuestionFromMaterialInput,
-): Promise<MaterialActionResult<RagAnswerResult>> {
+): Promise<MaterialActionResult<InternalRagAnswerResult>> {
   const materialId = input.materialId.trim();
   const question = input.question.trim();
   const requestedCount = normalizeTopK(input.topK);
@@ -479,9 +651,22 @@ export async function answerQuestionFromMaterial(
   }
 
   try {
+    const rateLimit = await checkRateLimit("chat", {
+      userId: user.data,
+      route: "answerQuestionFromMaterial",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
     await assertAiUsageAllowed({
       userId: user.data,
       featureType: "chat",
+      route: "answerQuestionFromMaterial",
       metadata: {
         material_id: materialId,
         requested_count: requestedCount ?? null,
@@ -516,20 +701,30 @@ export async function answerQuestionFromMaterial(
 
     const grounded = await generateGroundedAnswer({ question, chunks });
 
-    await logAiUsageEvent({
-      userId: user.data,
-      featureType: "chat",
-      status: "success",
+    const usage: RagAnswerUsage = {
       provider: grounded.provider ?? "gemini",
       model: grounded.model,
-      metadata: {
-        material_id: materialId,
-        requested_count: requestedCount ?? chunks.length,
-        chunk_count: chunks.length,
-        duration_ms: Date.now() - startedAt,
-        retry_count: grounded.retry_count,
-      },
-    });
+      requested_count: requestedCount ?? chunks.length,
+      chunk_count: chunks.length,
+      retry_count: grounded.retry_count,
+    };
+
+    if (input.recordSuccessUsage !== false) {
+      await logAiUsageEvent({
+        userId: user.data,
+        featureType: "chat",
+        status: "success",
+        provider: usage.provider,
+        model: usage.model,
+        metadata: {
+          material_id: materialId,
+          requested_count: usage.requested_count,
+          chunk_count: usage.chunk_count,
+          duration_ms: Date.now() - startedAt,
+          retry_count: usage.retry_count,
+        },
+      });
+    }
 
     return {
       ok: true,
@@ -539,6 +734,7 @@ export async function answerQuestionFromMaterial(
         sources: grounded.sources,
         source_chunk_ids: grounded.source_chunk_ids,
         insufficient_context: grounded.insufficient_context,
+        usage,
       },
     };
   } catch (error) {
@@ -593,14 +789,28 @@ async function answerQuestionAllMaterials(input: {
   question: string;
   topK?: number;
   userId: string;
-}): Promise<MaterialActionResult<RagAnswerResult>> {
+  recordSuccessUsage?: boolean;
+}): Promise<MaterialActionResult<InternalRagAnswerResult>> {
   const question = input.question.trim();
   const startedAt = Date.now();
 
   try {
+    const rateLimit = await checkRateLimit("chat", {
+      userId: input.userId,
+      route: "askRagChatQuestion",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
     await assertAiUsageAllowed({
       userId: input.userId,
       featureType: "chat",
+      route: "askRagChatQuestion",
       metadata: { material_id: "__all__", requested_count: input.topK ?? null },
     });
 
@@ -632,20 +842,30 @@ async function answerQuestionAllMaterials(input: {
 
     const grounded = await generateGroundedAnswer({ question, chunks });
 
-    await logAiUsageEvent({
-      userId: input.userId,
-      featureType: "chat",
-      status: "success",
+    const usage: RagAnswerUsage = {
       provider: grounded.provider ?? "gemini",
       model: grounded.model,
-      metadata: {
-        material_id: "__all__",
-        requested_count: input.topK ?? chunks.length,
-        chunk_count: chunks.length,
-        duration_ms: Date.now() - startedAt,
-        retry_count: grounded.retry_count,
-      },
-    });
+      requested_count: input.topK ?? chunks.length,
+      chunk_count: chunks.length,
+      retry_count: grounded.retry_count,
+    };
+
+    if (input.recordSuccessUsage !== false) {
+      await logAiUsageEvent({
+        userId: input.userId,
+        featureType: "chat",
+        status: "success",
+        provider: usage.provider,
+        model: usage.model,
+        metadata: {
+          material_id: "__all__",
+          requested_count: usage.requested_count,
+          chunk_count: usage.chunk_count,
+          duration_ms: Date.now() - startedAt,
+          retry_count: usage.retry_count,
+        },
+      });
+    }
 
     return {
       ok: true,
@@ -655,6 +875,7 @@ async function answerQuestionAllMaterials(input: {
         sources: grounded.sources,
         source_chunk_ids: grounded.source_chunk_ids,
         insufficient_context: grounded.insufficient_context,
+        usage,
       },
     };
   } catch (error) {
@@ -1045,16 +1266,44 @@ export async function askRagChatQuestion(
   }
 
   const answer = isAllMaterials
-    ? await answerQuestionAllMaterials({ question, topK, userId: user.data })
-    : await answerQuestionFromMaterial({ materialId: rawMaterialId!, question, topK });
+    ? await answerQuestionAllMaterials({
+        question,
+        topK,
+        userId: user.data,
+        recordSuccessUsage: false,
+      })
+    : await answerQuestionFromMaterial({
+        materialId: rawMaterialId!,
+        question,
+        topK,
+        recordSuccessUsage: false,
+      });
 
   if (!answer.ok) {
+    if (answer.error === LIMIT_REACHED_MESSAGE) {
+      return answer;
+    }
+
     logChatPersistenceError({
       step: "answer",
       sessionId,
       materialId: rawMaterialId ?? undefined,
       userId: user.data,
       error: new Error(answer.error),
+    });
+    await logRagActionError({
+      route: "askRagChatQuestion",
+      userId: user.data,
+      featureType: "chat",
+      errorCode: "RAG_ANSWER_FAILED",
+      safeMessage: answer.error,
+      metadata: {
+        session_id: sessionId,
+        material_id: rawMaterialId ?? "__all__",
+        has_material: !isAllMaterials,
+        requested_count: topK,
+        step: "answer",
+      },
     });
     return answer;
   }
@@ -1073,13 +1322,69 @@ export async function askRagChatQuestion(
     },
   });
 
-  if (!savedMessages.ok) return savedMessages;
+  if (!savedMessages.ok) {
+    await logRagActionError({
+      route: "askRagChatQuestion",
+      userId: user.data,
+      featureType: "chat",
+      errorCode: "RAG_CHAT_SAVE_FAILED",
+      safeMessage: "RAG chat persistence failed.",
+      metadata: {
+        session_id: sessionId,
+        material_id: rawMaterialId ?? "__all__",
+        has_material: !isAllMaterials,
+        requested_count: topK,
+        source_count: answer.data.sources.length,
+        insufficient_context: answer.data.insufficient_context,
+        step: "save_messages",
+      },
+    });
+    return savedMessages;
+  }
+  if (answer.data.usage) {
+    await logAiUsageEvent({
+      userId: user.data,
+      featureType: "chat",
+      status: "success",
+      provider: answer.data.usage.provider,
+      model: answer.data.usage.model,
+      metadata: {
+        material_id: rawMaterialId ?? "__all__",
+        requested_count: answer.data.usage.requested_count,
+        chunk_count: answer.data.usage.chunk_count,
+        retry_count: answer.data.usage.retry_count,
+      },
+    });
+  }
+
+  await logRagActionSuccess({
+    route: "askRagChatQuestion",
+    userId: user.data,
+    featureType: "chat",
+    metadata: {
+      session_id: sessionId,
+      material_id: rawMaterialId ?? "__all__",
+      has_material: !isAllMaterials,
+      requested_count: topK,
+      source_count: answer.data.sources.length,
+      insufficient_context: answer.data.insufficient_context,
+    },
+  });
+
   revalidateChatViews(rawMaterialId);
+
+  const publicAnswer: RagAnswerResult = {
+    material_id: answer.data.material_id,
+    answer: answer.data.answer,
+    sources: answer.data.sources,
+    source_chunk_ids: answer.data.source_chunk_ids,
+    insufficient_context: answer.data.insufficient_context,
+  };
 
   return {
     ok: true,
     data: {
-      ...answer.data,
+      ...publicAnswer,
       session_id: sessionId,
       user_message_id: savedMessages.data.userMessage.id,
       assistant_message_id: savedMessages.data.assistantMessage.id,

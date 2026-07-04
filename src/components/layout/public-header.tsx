@@ -6,7 +6,7 @@ import { AppLogo } from "./app-logo";
 import { Container } from "./container";
 
 const linkClasses =
-  "rounded-md px-3 py-2 text-sm font-black no-underline hover:bg-accent-yellow";
+  "rounded-md px-3 py-2 text-sm font-black no-underline transition-all duration-200 hover-highlight-yellow";
 
 export function PublicHeader() {
   return (

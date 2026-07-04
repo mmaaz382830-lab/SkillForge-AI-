@@ -1,7 +1,6 @@
 export const publicRoutes = {
   home: "/",
-  features: "/features",
-  pricing: "/pricing",
+  features: "/#features",
   login: "/login",
   signup: "/signup",
   forgotPassword: "/forgot-password",
@@ -25,6 +24,7 @@ export const dashboardRoutes = {
 export const adminRoutes = {
   admin: "/admin",
   users: "/admin/users",
+  usage: "/admin/usage",
   logs: "/admin/logs",
 } as const;
 

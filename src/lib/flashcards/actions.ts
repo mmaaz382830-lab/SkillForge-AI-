@@ -18,7 +18,9 @@ import {
   aiFlashcardsOutputSchema,
   type AiFlashcardsOutput,
 } from "@/lib/ai/schemas";
-import { assertAiUsageAllowed } from "@/lib/ai/usage";
+import { LIMIT_REACHED_MESSAGE, assertAiUsageAllowed } from "@/lib/ai/usage";
+import { logApiEvent, logErrorEvent } from "@/lib/logging/actions";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   Flashcard,
@@ -96,6 +98,71 @@ async function logFlashcardGenerationError(input: {
   });
 }
 
+async function logFlashcardActionSuccess(input: {
+  userId: string;
+  deckId: string;
+  materialId: string;
+  requestedCount: number;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  generatedItemCount: number;
+}) {
+  await logApiEvent({
+    userId: input.userId,
+    route: "generateFlashcardDeck",
+    method: "server_action",
+    featureType: "flashcards",
+    status: "success",
+    durationMs: input.durationMs,
+    metadata: {
+      deck_id: input.deckId,
+      material_id: input.materialId,
+      requested_count: input.requestedCount,
+      difficulty: input.difficulty,
+      generated_item_count: input.generatedItemCount,
+      retry_count: input.retryCount ?? null,
+    },
+  });
+}
+
+async function logFlashcardActionError(input: {
+  userId: string;
+  materialId: string;
+  requestedCount: number;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  errorCode: string;
+  safeMessage: string;
+}) {
+  const metadata = {
+    material_id: input.materialId,
+    requested_count: input.requestedCount,
+    difficulty: input.difficulty,
+    retry_count: input.retryCount ?? null,
+    error_code: input.errorCode,
+  };
+
+  await logApiEvent({
+    userId: input.userId,
+    route: "generateFlashcardDeck",
+    method: "server_action",
+    featureType: "flashcards",
+    status: "error",
+    durationMs: input.durationMs,
+    metadata,
+  });
+  await logErrorEvent({
+    userId: input.userId,
+    category: "ai_generation",
+    safeMessage: input.safeMessage,
+    source: "generateFlashcardDeck",
+    featureType: "flashcards",
+    severity: "error",
+    metadata,
+  });
+}
 async function loadOwnedCompletedMaterialForFlashcards(input: {
   materialId: string;
   userId: string;
@@ -191,9 +258,22 @@ export async function generateFlashcardDeck(
   });
 
   try {
+    const rateLimit = await checkRateLimit("flashcards", {
+      userId: user.data,
+      route: "generateFlashcardDeck",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
     await assertAiUsageAllowed({
       userId: user.data,
       featureType: "flashcards",
+      route: "generateFlashcardDeck",
       metadata: usageMetadata,
     });
 
@@ -238,6 +318,16 @@ export async function generateFlashcardDeck(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logFlashcardActionError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        requestedCount: validation.data.card_count,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Flashcard deck save failed.",
+      });
 
       return {
         ok: false,
@@ -274,6 +364,16 @@ export async function generateFlashcardDeck(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logFlashcardActionError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        requestedCount: validation.data.card_count,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Flashcard card save failed.",
+      });
 
       return {
         ok: false,
@@ -294,6 +394,17 @@ export async function generateFlashcardDeck(
         durationMs: Date.now() - startedAt,
         retryCount: generated.retryCount,
       }),
+    });
+
+    await logFlashcardActionSuccess({
+      userId: user.data,
+      deckId: deck.id,
+      materialId: validation.data.material_id,
+      requestedCount: validation.data.card_count,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      retryCount: generated.retryCount,
+      generatedItemCount: cards.length,
     });
 
     revalidateFlashcardViews();
@@ -320,16 +431,31 @@ export async function generateFlashcardDeck(
       errorCode,
     });
 
+    const safeMessage =
+      error instanceof AiConfigurationError
+        ? AI_SAFE_MESSAGES.configurationUnavailable
+        : getSafeAiErrorMessage(error);
+
+    await logFlashcardActionError({
+      userId: user.data,
+      materialId: validation.data.material_id,
+      requestedCount: validation.data.card_count,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      errorCode,
+      safeMessage,
+    });
+
     if (error instanceof AiConfigurationError) {
       return {
         ok: false,
-        error: AI_SAFE_MESSAGES.configurationUnavailable,
+        error: safeMessage,
       };
     }
 
     return {
       ok: false,
-      error: getSafeAiErrorMessage(error),
+      error: safeMessage,
     };
   }
 }

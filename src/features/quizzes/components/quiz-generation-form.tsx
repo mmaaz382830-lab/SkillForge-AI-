@@ -13,6 +13,7 @@ type QuizGenerationFormProps = {
   materials: MaterialRoadmapOption[];
   onSubmit: (input: QuizGenerationInput) => Promise<boolean>;
   pending?: boolean;
+  defaultDifficulty?: DifficultyLevel;
 };
 
 function readFormValue(formData: FormData, key: string): string {
@@ -24,6 +25,7 @@ export function QuizGenerationForm({
   materials,
   onSubmit,
   pending = false,
+  defaultDifficulty = "beginner",
 }: QuizGenerationFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const formId = useId();
@@ -127,7 +129,7 @@ export function QuizGenerationForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Select
-          defaultValue="beginner"
+          defaultValue={defaultDifficulty}
           disabled={pending}
           id={`${formId}-difficulty`}
           label="Difficulty"

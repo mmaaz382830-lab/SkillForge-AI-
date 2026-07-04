@@ -92,7 +92,7 @@ export function FlashcardGenerationForm({
         label="Topic focus"
         maxLength={120}
         name="topic"
-        placeholder="React hooks, auth flow, database indexes"
+        placeholder="Example: React hooks, async/await, database indexes"
       />
 
       <div className="grid gap-4 md:grid-cols-2">

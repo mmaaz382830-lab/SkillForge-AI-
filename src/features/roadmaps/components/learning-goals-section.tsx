@@ -118,7 +118,7 @@ export function LearningGoalsSection({ goals }: LearningGoalsSectionProps) {
       <div className="brutal-card bg-accent-yellow p-5 sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)] lg:items-start">
           <div>
-            <p className="text-xs font-black uppercase">Day 4 foundation</p>
+            <p className="text-xs font-black uppercase">Learning path</p>
             <h2
               className="mt-1 font-heading text-3xl font-black leading-tight"
               id="learning-goals-heading"

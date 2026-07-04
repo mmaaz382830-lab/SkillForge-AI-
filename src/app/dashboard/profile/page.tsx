@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { siteConfig } from "@/config/site";
-import { dashboardRoutes } from "@/config/routes";
+import { dashboardRoutes, publicRoutes } from "@/config/routes";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { signOutAndRedirect } from "@/lib/auth/actions";
+import { ProfileDisplayNameForm } from "@/features/auth/components/profile-display-name-form";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
@@ -127,34 +129,26 @@ export default async function ProfilePage() {
         className="brutal-card border-state-error p-5 sm:p-6"
         aria-label="Account actions"
       >
-        <h2 className="mb-2 font-heading text-xl font-black">Account actions</h2>
-        <p className="mb-4 text-sm font-medium text-zinc-600">
-          Profile editing and password changes connect in later phases.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            aria-disabled="true"
-          >
-            Edit profile
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            aria-disabled="true"
-          >
-            Change password
-          </Button>
-          <form action={signOutAndRedirect}>
-            <Button
-              type="submit"
-              variant="ghost"
-              className="text-state-error hover:bg-accent-pink"
+        <h2 className="mb-4 font-heading text-xl font-black">Account actions</h2>
+        <div className="grid gap-5">
+          <ProfileDisplayNameForm displayName={displayName} />
+          <div className="flex flex-wrap gap-3 border-t-2 border-black pt-4">
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded-md border-2 border-black bg-paper-base px-4 py-2.5 text-base font-black leading-none no-underline shadow-brutal-sm transition hover:bg-accent-yellow"
+              href={publicRoutes.forgotPassword}
             >
-              Sign out
-            </Button>
-          </form>
+              Reset password
+            </Link>
+            <form action={signOutAndRedirect}>
+              <Button
+                type="submit"
+                variant="ghost"
+                className="text-state-error hover:bg-accent-pink"
+              >
+                Sign out
+              </Button>
+            </form>
+          </div>
         </div>
       </section>
     </DashboardShell>

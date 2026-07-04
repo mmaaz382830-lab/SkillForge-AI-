@@ -19,7 +19,9 @@ import {
   aiInterviewQuestionsOutputSchema,
   type AiInterviewQuestionsOutput,
 } from "@/lib/ai/schemas";
-import { assertAiUsageAllowed } from "@/lib/ai/usage";
+import { LIMIT_REACHED_MESSAGE, assertAiUsageAllowed } from "@/lib/ai/usage";
+import { logApiEvent, logErrorEvent } from "@/lib/logging/actions";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   InterviewActionResult,
@@ -112,6 +114,83 @@ async function logInterviewGenerationError(input: {
   });
 }
 
+async function logInterviewActionSuccess(input: {
+  route: "generateInterviewQuestions" | "submitInterviewAnswer";
+  userId: string;
+  sessionId?: string;
+  materialId: string | null;
+  requestedCount: number;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  generatedItemCount: number;
+  questionMessageId?: string;
+  hasAnswer?: boolean;
+}) {
+  await logApiEvent({
+    userId: input.userId,
+    route: input.route,
+    method: "server_action",
+    featureType: "interview",
+    status: "success",
+    durationMs: input.durationMs,
+    metadata: {
+      session_id: input.sessionId ?? null,
+      material_id: input.materialId,
+      requested_count: input.requestedCount,
+      difficulty: input.difficulty,
+      generated_item_count: input.generatedItemCount,
+      retry_count: input.retryCount ?? null,
+      question_message_id: input.questionMessageId ?? null,
+      has_answer: input.hasAnswer ?? null,
+    },
+  });
+}
+
+async function logInterviewActionError(input: {
+  route: "generateInterviewQuestions" | "submitInterviewAnswer";
+  userId: string;
+  sessionId?: string;
+  materialId: string | null;
+  requestedCount: number;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  errorCode: string;
+  safeMessage: string;
+  questionMessageId?: string;
+  hasAnswer?: boolean;
+}) {
+  const metadata = {
+    session_id: input.sessionId ?? null,
+    material_id: input.materialId,
+    requested_count: input.requestedCount,
+    difficulty: input.difficulty,
+    retry_count: input.retryCount ?? null,
+    error_code: input.errorCode,
+    question_message_id: input.questionMessageId ?? null,
+    has_answer: input.hasAnswer ?? null,
+  };
+
+  await logApiEvent({
+    userId: input.userId,
+    route: input.route,
+    method: "server_action",
+    featureType: "interview",
+    status: "error",
+    durationMs: input.durationMs,
+    metadata,
+  });
+  await logErrorEvent({
+    userId: input.userId,
+    category: "ai_generation",
+    safeMessage: input.safeMessage,
+    source: input.route,
+    featureType: "interview",
+    severity: "error",
+    metadata,
+  });
+}
 async function loadOwnedCompletedMaterialForInterview(input: {
   materialId: string;
   userId: string;
@@ -392,9 +471,22 @@ export async function submitInterviewAnswer(
   let generatedFeedback;
 
   try {
+    const rateLimit = await checkRateLimit("interview", {
+      userId: user.data,
+      route: "submitInterviewAnswer",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
     await assertAiUsageAllowed({
       userId: user.data,
       featureType: "interview",
+      route: "submitInterviewAnswer",
       metadata: usageMetadata,
     });
 
@@ -434,6 +526,19 @@ export async function submitInterviewAnswer(
       difficulty: questionFeedback.difficulty,
       durationMs: Date.now() - startedAt,
       errorCode,
+    });
+    await logInterviewActionError({
+      route: "submitInterviewAnswer",
+      userId: user.data,
+      sessionId: session.id,
+      materialId: session.material_id,
+      requestedCount: 1,
+      difficulty: questionFeedback.difficulty,
+      durationMs: Date.now() - startedAt,
+      errorCode,
+      safeMessage: INTERVIEW_FEEDBACK_SAFE_ERROR,
+      questionMessageId: question.id,
+      hasAnswer: Boolean(validation.data.answer.trim()),
     });
 
     return { ok: false, error: INTERVIEW_FEEDBACK_SAFE_ERROR };
@@ -489,6 +594,20 @@ export async function submitInterviewAnswer(
       retryCount: generatedFeedback.retryCount,
       errorCode: "INTERVIEW_FEEDBACK_SAVE_FAILED",
     });
+    await logInterviewActionError({
+      route: "submitInterviewAnswer",
+      userId: user.data,
+      sessionId: session.id,
+      materialId: session.material_id,
+      requestedCount: 1,
+      difficulty: questionFeedback.difficulty,
+      durationMs: Date.now() - startedAt,
+      retryCount: generatedFeedback.retryCount,
+      errorCode: "INTERVIEW_FEEDBACK_SAVE_FAILED",
+      safeMessage: "Interview feedback save failed.",
+      questionMessageId: question.id,
+      hasAnswer: Boolean(validation.data.answer.trim()),
+    });
 
     return { ok: false, error: "Could not save answer. Please try again." };
   }
@@ -506,6 +625,20 @@ export async function submitInterviewAnswer(
       durationMs: Date.now() - startedAt,
       retryCount: generatedFeedback.retryCount,
     }),
+  });
+
+  await logInterviewActionSuccess({
+    route: "submitInterviewAnswer",
+    userId: user.data,
+    sessionId: session.id,
+    materialId: session.material_id,
+    requestedCount: 1,
+    difficulty: questionFeedback.difficulty,
+    durationMs: Date.now() - startedAt,
+    retryCount: generatedFeedback.retryCount,
+    generatedItemCount: 1,
+    questionMessageId: question.id,
+    hasAnswer: Boolean(validation.data.answer.trim()),
   });
 
   const userAnswerMessage = insertedMessages.find((message) => message.role === "user");
@@ -582,9 +715,22 @@ export async function generateInterviewQuestions(
   });
 
   try {
+    const rateLimit = await checkRateLimit("interview", {
+      userId: user.data,
+      route: "generateInterviewQuestions",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
     await assertAiUsageAllowed({
       userId: user.data,
       featureType: "interview",
+      route: "generateInterviewQuestions",
       metadata: usageMetadata,
     });
 
@@ -636,6 +782,17 @@ export async function generateInterviewQuestions(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logInterviewActionError({
+        route: "generateInterviewQuestions",
+        userId: user.data,
+        materialId: validation.data.material_id,
+        requestedCount: validation.data.question_count,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Interview session save failed.",
+      });
 
       return { ok: false, error: "Could not generate interview questions." };
     }
@@ -673,6 +830,18 @@ export async function generateInterviewQuestions(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logInterviewActionError({
+        route: "generateInterviewQuestions",
+        userId: user.data,
+        sessionId: session.id,
+        materialId: validation.data.material_id,
+        requestedCount: validation.data.question_count,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Interview messages save failed.",
+      });
 
       return { ok: false, error: "Could not generate interview questions." };
     }
@@ -690,6 +859,18 @@ export async function generateInterviewQuestions(
         durationMs: Date.now() - startedAt,
         retryCount: generated.retryCount,
       }),
+    });
+
+    await logInterviewActionSuccess({
+      route: "generateInterviewQuestions",
+      userId: user.data,
+      sessionId: session.id,
+      materialId: validation.data.material_id,
+      requestedCount: validation.data.question_count,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      retryCount: generated.retryCount,
+      generatedItemCount: messages.length,
     });
 
     revalidateInterviewViews();
@@ -736,11 +917,27 @@ export async function generateInterviewQuestions(
       errorCode,
     });
 
+    const safeMessage =
+      error instanceof AiConfigurationError
+        ? AI_SAFE_MESSAGES.configurationUnavailable
+        : getSafeAiErrorMessage(error);
+
+    await logInterviewActionError({
+      route: "generateInterviewQuestions",
+      userId: user.data,
+      materialId: validation.data.material_id,
+      requestedCount: validation.data.question_count,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      errorCode,
+      safeMessage,
+    });
+
     if (error instanceof AiConfigurationError) {
-      return { ok: false, error: AI_SAFE_MESSAGES.configurationUnavailable };
+      return { ok: false, error: safeMessage };
     }
 
-    return { ok: false, error: getSafeAiErrorMessage(error) };
+    return { ok: false, error: safeMessage };
   }
 }
 

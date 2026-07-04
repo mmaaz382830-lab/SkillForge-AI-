@@ -26,11 +26,13 @@ export function DashboardTopbar({
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid gap-1">
+        <div className="grid min-w-0 max-w-4xl gap-1">
           <p className="text-xs font-black uppercase">Study desk</p>
           <h1 className="text-3xl sm:text-4xl">{title}</h1>
           {description ? (
-            <p className="text-base font-medium leading-7">{description}</p>
+            <p className="max-w-3xl text-base font-medium leading-7">
+              {description}
+            </p>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3">

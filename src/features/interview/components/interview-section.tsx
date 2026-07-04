@@ -168,7 +168,7 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
-              Day 8 practice loop
+              Mock interview
             </p>
             <h2
               className="mt-1 font-heading text-3xl font-black leading-tight"

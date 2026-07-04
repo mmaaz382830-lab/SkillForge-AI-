@@ -15,7 +15,9 @@ import {
   logAiUsageEvent,
 } from "@/lib/ai";
 import { aiRoadmapOutputSchema, type AiRoadmapOutput } from "@/lib/ai/schemas";
-import { assertAiUsageAllowed } from "@/lib/ai/usage";
+import { LIMIT_REACHED_MESSAGE, assertAiUsageAllowed } from "@/lib/ai/usage";
+import { logApiEvent, logErrorEvent } from "@/lib/logging/actions";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   AiRoadmapGenerationInput,
@@ -114,6 +116,71 @@ async function logRoadmapGenerationError(input: {
   });
 }
 
+async function logRoadmapActionSuccess(input: {
+  userId: string;
+  roadmapId: string;
+  materialId?: string | null;
+  goalId?: string | null;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  generatedItemCount: number;
+}) {
+  await logApiEvent({
+    userId: input.userId,
+    route: "generateAiRoadmap",
+    method: "server_action",
+    featureType: "roadmap",
+    status: "success",
+    durationMs: input.durationMs,
+    metadata: {
+      roadmap_id: input.roadmapId,
+      material_id: input.materialId ?? null,
+      goal_id: input.goalId ?? null,
+      difficulty: input.difficulty,
+      generated_item_count: input.generatedItemCount,
+      retry_count: input.retryCount ?? null,
+    },
+  });
+}
+
+async function logRoadmapActionError(input: {
+  userId: string;
+  materialId?: string | null;
+  goalId?: string | null;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  errorCode: string;
+  safeMessage: string;
+}) {
+  const metadata = {
+    material_id: input.materialId ?? null,
+    goal_id: input.goalId ?? null,
+    difficulty: input.difficulty,
+    retry_count: input.retryCount ?? null,
+    error_code: input.errorCode,
+  };
+
+  await logApiEvent({
+    userId: input.userId,
+    route: "generateAiRoadmap",
+    method: "server_action",
+    featureType: "roadmap",
+    status: "error",
+    durationMs: input.durationMs,
+    metadata,
+  });
+  await logErrorEvent({
+    userId: input.userId,
+    category: "ai_generation",
+    safeMessage: input.safeMessage,
+    source: "generateAiRoadmap",
+    featureType: "roadmap",
+    severity: "error",
+    metadata,
+  });
+}
 function normalizeGeneratedRoadmapTasks(
   output: AiRoadmapOutput,
 ): Array<Pick<RoadmapTask, "title" | "description" | "order_index" | "estimated_time">> {
@@ -451,9 +518,22 @@ export async function generateAiRoadmap(
   });
 
   try {
+    const rateLimit = await checkRateLimit("roadmap", {
+      userId: user.data,
+      route: "generateAiRoadmap",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
     await assertAiUsageAllowed({
       userId: user.data,
       featureType: "roadmap",
+      route: "generateAiRoadmap",
       metadata: usageMetadata,
     });
 
@@ -503,6 +583,16 @@ export async function generateAiRoadmap(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logRoadmapActionError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        goalId: validation.data.goal_id,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Roadmap save failed.",
+      });
 
       return {
         ok: false,
@@ -539,6 +629,16 @@ export async function generateAiRoadmap(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logRoadmapActionError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        goalId: validation.data.goal_id,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Roadmap task save failed.",
+      });
 
       return {
         ok: false,
@@ -559,6 +659,17 @@ export async function generateAiRoadmap(
         durationMs: Date.now() - startedAt,
         retryCount: generated.retryCount,
       }),
+    });
+
+    await logRoadmapActionSuccess({
+      userId: user.data,
+      roadmapId: roadmap.id,
+      materialId: validation.data.material_id,
+      goalId: validation.data.goal_id,
+      difficulty: generated.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      retryCount: generated.retryCount,
+      generatedItemCount: generatedTasks.length,
     });
 
     revalidateRoadmapViews(roadmap.id);
@@ -585,16 +696,31 @@ export async function generateAiRoadmap(
       errorCode,
     });
 
+    const safeMessage =
+      error instanceof AiConfigurationError
+        ? AI_SAFE_MESSAGES.configurationUnavailable
+        : getSafeAiErrorMessage(error);
+
+    await logRoadmapActionError({
+      userId: user.data,
+      materialId: validation.data.material_id,
+      goalId: validation.data.goal_id,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      errorCode,
+      safeMessage,
+    });
+
     if (error instanceof AiConfigurationError) {
       return {
         ok: false,
-        error: AI_SAFE_MESSAGES.configurationUnavailable,
+        error: safeMessage,
       };
     }
 
     return {
       ok: false,
-      error: getSafeAiErrorMessage(error),
+      error: safeMessage,
     };
   }
 }

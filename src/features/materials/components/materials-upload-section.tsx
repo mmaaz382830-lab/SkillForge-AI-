@@ -168,7 +168,7 @@ export function MaterialsUploadSection() {
     <section aria-labelledby="materials-upload-heading" className="grid gap-5">
       <div className="brutal-card bg-accent-blue p-5 sm:p-6">
         <p className="text-xs font-black uppercase text-zinc-700">
-          Day 5 material intake
+          Material intake
         </p>
         <h2
           className="mt-1 font-heading text-3xl font-black leading-tight"
@@ -177,7 +177,7 @@ export function MaterialsUploadSection() {
           Add study source material
         </h2>
         <p className="mt-3 max-w-3xl font-semibold leading-7">
-          Upload PDF/TXT or paste notes. RAG chat and AI generation come later.
+          Upload PDF/TXT or paste notes. Processed materials power chat, roadmaps, flashcards, quizzes, and interview practice.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {["PDF", "TXT", "Pasted text", `Max ${MATERIAL_MAX_FILE_SIZE_LABEL}`].map(

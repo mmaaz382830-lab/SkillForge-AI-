@@ -18,7 +18,9 @@ import {
   aiQuizOutputSchema,
   type AiQuizOutput,
 } from "@/lib/ai/schemas";
-import { assertAiUsageAllowed } from "@/lib/ai/usage";
+import { LIMIT_REACHED_MESSAGE, assertAiUsageAllowed } from "@/lib/ai/usage";
+import { logApiEvent, logErrorEvent } from "@/lib/logging/actions";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   Quiz,
@@ -116,6 +118,71 @@ async function logQuizGenerationError(input: {
   });
 }
 
+async function logQuizActionSuccess(input: {
+  userId: string;
+  quizId: string;
+  materialId: string;
+  requestedCount: number;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  questionCount: number;
+}) {
+  await logApiEvent({
+    userId: input.userId,
+    route: "generateQuiz",
+    method: "server_action",
+    featureType: "quiz",
+    status: "success",
+    durationMs: input.durationMs,
+    metadata: {
+      quiz_id: input.quizId,
+      material_id: input.materialId,
+      requested_count: input.requestedCount,
+      difficulty: input.difficulty,
+      question_count: input.questionCount,
+      retry_count: input.retryCount ?? null,
+    },
+  });
+}
+
+async function logQuizActionError(input: {
+  userId: string;
+  materialId: string;
+  requestedCount: number;
+  difficulty: string;
+  durationMs: number;
+  retryCount?: number;
+  errorCode: string;
+  safeMessage: string;
+}) {
+  const metadata = {
+    material_id: input.materialId,
+    requested_count: input.requestedCount,
+    difficulty: input.difficulty,
+    retry_count: input.retryCount ?? null,
+    error_code: input.errorCode,
+  };
+
+  await logApiEvent({
+    userId: input.userId,
+    route: "generateQuiz",
+    method: "server_action",
+    featureType: "quiz",
+    status: "error",
+    durationMs: input.durationMs,
+    metadata,
+  });
+  await logErrorEvent({
+    userId: input.userId,
+    category: "ai_generation",
+    safeMessage: input.safeMessage,
+    source: "generateQuiz",
+    featureType: "quiz",
+    severity: "error",
+    metadata,
+  });
+}
 async function loadOwnedCompletedMaterialForQuiz(input: {
   materialId: string;
   userId: string;
@@ -434,9 +501,22 @@ export async function generateQuiz(
   });
 
   try {
+    const rateLimit = await checkRateLimit("quiz", {
+      userId: user.data,
+      route: "generateQuiz",
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: rateLimit.message ?? LIMIT_REACHED_MESSAGE,
+      };
+    }
+
     await assertAiUsageAllowed({
       userId: user.data,
       featureType: "quiz",
+      route: "generateQuiz",
       metadata: usageMetadata,
     });
 
@@ -480,6 +560,16 @@ export async function generateQuiz(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logQuizActionError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        requestedCount: validation.data.question_count,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Quiz save failed.",
+      });
 
       return {
         ok: false,
@@ -515,6 +605,16 @@ export async function generateQuiz(
         retryCount: generated.retryCount,
         errorCode,
       });
+      await logQuizActionError({
+        userId: user.data,
+        materialId: validation.data.material_id,
+        requestedCount: validation.data.question_count,
+        difficulty: validation.data.difficulty,
+        durationMs: Date.now() - startedAt,
+        retryCount: generated.retryCount,
+        errorCode,
+        safeMessage: "Quiz questions save failed.",
+      });
 
       return {
         ok: false,
@@ -535,6 +635,17 @@ export async function generateQuiz(
         durationMs: Date.now() - startedAt,
         retryCount: generated.retryCount,
       }),
+    });
+
+    await logQuizActionSuccess({
+      userId: user.data,
+      quizId: quiz.id,
+      materialId: validation.data.material_id,
+      requestedCount: validation.data.question_count,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      retryCount: generated.retryCount,
+      questionCount: questions.length,
     });
 
     revalidateQuizViews();
@@ -579,16 +690,31 @@ export async function generateQuiz(
       errorCode,
     });
 
+    const safeMessage =
+      error instanceof AiConfigurationError
+        ? AI_SAFE_MESSAGES.configurationUnavailable
+        : getSafeAiErrorMessage(error);
+
+    await logQuizActionError({
+      userId: user.data,
+      materialId: validation.data.material_id,
+      requestedCount: validation.data.question_count,
+      difficulty: validation.data.difficulty,
+      durationMs: Date.now() - startedAt,
+      errorCode,
+      safeMessage,
+    });
+
     if (error instanceof AiConfigurationError) {
       return {
         ok: false,
-        error: AI_SAFE_MESSAGES.configurationUnavailable,
+        error: safeMessage,
       };
     }
 
     return {
       ok: false,
-      error: getSafeAiErrorMessage(error),
+      error: safeMessage,
     };
   }
 }

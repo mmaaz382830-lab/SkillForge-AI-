@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { publicRoutes } from "@/config/routes";
 import { siteConfig } from "@/config/site";
@@ -7,20 +8,35 @@ type AppLogoProps = {
   href?: string;
   compact?: boolean;
   className?: string;
+  markSize?: "sm" | "md";
 };
+
+const markSizeClasses = {
+  sm: "h-10 w-10",
+  md: "h-11 w-11",
+} as const;
 
 export function AppLogo({
   href = publicRoutes.home,
   compact = false,
   className,
+  markSize = "md",
 }: AppLogoProps) {
   const content = (
-    <span className="inline-flex items-center gap-3">
+    <span className="inline-flex items-center gap-3 align-middle">
       <span
-        aria-hidden="true"
-        className="flex h-10 w-10 items-center justify-center rounded-md border-2 border-black bg-accent-yellow font-heading text-sm font-black shadow-brutal-sm"
+        className={cn(
+          "relative block shrink-0 overflow-hidden rounded-md",
+          markSizeClasses[markSize],
+        )}
       >
-        SF
+        <Image
+          alt="SkillForge AI logo"
+          className="h-full w-full object-contain"
+          height={96}
+          src="/brand/skillforge-logo.png"
+          width={96}
+        />
       </span>
       {!compact ? (
         <span className="grid leading-none">
@@ -50,3 +66,4 @@ export function AppLogo({
     </Link>
   );
 }
+
