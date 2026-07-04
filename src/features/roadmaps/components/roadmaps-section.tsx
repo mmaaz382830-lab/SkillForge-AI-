@@ -27,6 +27,7 @@ type RoadmapsSectionProps = {
   goals: LearningGoalOption[];
   materials: MaterialRoadmapOption[];
   roadmaps: RoadmapView[];
+  defaultRoadmapDifficulty?: AiRoadmapGenerationInput["difficulty"];
 };
 
 type Feedback = {
@@ -46,10 +47,12 @@ export function RoadmapsSection({
   goals,
   materials,
   roadmaps,
+  defaultRoadmapDifficulty = "beginner",
 }: RoadmapsSectionProps) {
   const router = useRouter();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
   const creating = pendingAction === "create";
   const generating = pendingAction === "generate";
 
@@ -99,9 +102,10 @@ export function RoadmapsSection({
     setFeedback({
       variant: "success",
       title: "Roadmap created.",
-      description: "Task checklists connect in the next Day 4 prompt.",
+      description: "Open the roadmap to add and track tasks.",
     });
     router.refresh();
+    setManualFormOpen(false);
     return true;
   }
 
@@ -159,10 +163,10 @@ export function RoadmapsSection({
   return (
     <section aria-labelledby="roadmaps-heading" className="grid gap-5">
       <div className="brutal-card p-5 sm:p-6">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
-          <div>
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] xl:items-start">
+          <div className="min-w-0">
             <p className="text-xs font-black uppercase text-zinc-500">
-              Day 6 generator
+              Learning path
             </p>
             <h2
               className="mt-1 font-heading text-3xl font-black leading-tight"
@@ -191,7 +195,7 @@ export function RoadmapsSection({
             </div>
           </div>
 
-          <div className="rounded-lg border-2 border-black bg-accent-yellow p-4 shadow-brutal">
+          <div className="min-w-0 overflow-hidden rounded-lg border-2 border-black bg-accent-yellow p-4 shadow-brutal">
             <h3 className="font-heading text-xl font-black">
               Generate with AI
             </h3>
@@ -204,16 +208,36 @@ export function RoadmapsSection({
               materials={materials}
               onSubmit={handleGenerate}
               pending={generating}
+              defaultDifficulty={defaultRoadmapDifficulty}
             />
           </div>
         </div>
       </div>
 
       <div className="rounded-lg border-2 border-black bg-paper-base p-4 shadow-brutal">
-        <h3 className="mb-3 font-heading text-xl font-black">
-          Create a manual roadmap
-        </h3>
-        <RoadmapForm goals={goals} onSubmit={handleCreate} pending={creating} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-heading text-xl font-black">
+              Create manually
+            </h3>
+            <p className="mt-1 text-sm font-semibold leading-6 text-zinc-600">
+              Use this when you want to write the roadmap yourself.
+            </p>
+          </div>
+          <button
+            aria-expanded={manualFormOpen}
+            className="pressable inline-flex min-h-11 items-center justify-center rounded-md border-2 border-black bg-paper-base px-4 py-2.5 text-sm font-black leading-none"
+            onClick={() => setManualFormOpen((open) => !open)}
+            type="button"
+          >
+            {manualFormOpen ? "Hide manual form" : "Create manually"}
+          </button>
+        </div>
+        {manualFormOpen ? (
+          <div className="mt-4 border-t-2 border-black pt-4">
+            <RoadmapForm goals={goals} onSubmit={handleCreate} pending={creating} />
+          </div>
+        ) : null}
       </div>
 
       {feedback ? (

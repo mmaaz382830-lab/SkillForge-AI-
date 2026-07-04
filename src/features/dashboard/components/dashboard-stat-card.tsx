@@ -5,6 +5,7 @@ type DashboardStatCardProps = {
   value: string | number;
   accent?: "yellow" | "green" | "pink" | "blue" | "neutral";
   suffix?: string;
+  icon?: string;
   className?: string;
 };
 
@@ -17,36 +18,34 @@ const accentMap: Record<NonNullable<DashboardStatCardProps["accent"]>, string> =
     neutral: "bg-paper-muted",
   };
 
-/**
- * DashboardStatCard — compact metric card used in the dashboard home grid.
- * Receives already-loaded values from dashboard server components.
- */
 export function DashboardStatCard({
   label,
   value,
   accent = "neutral",
   suffix,
+  icon = "#",
   className,
 }: DashboardStatCardProps) {
   return (
-    <div className={cn("brutal-card p-5", className)}>
-      <div
-        className={cn(
-          "mb-3 flex h-10 w-10 items-center justify-center rounded-md border-2 border-black text-sm font-black shadow-brutal-sm",
-          accentMap[accent],
-        )}
-        aria-hidden="true"
-      >
-        #
+    <div className={cn("brutal-card grid gap-4 p-5", className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={cn(
+            "flex h-11 min-w-11 items-center justify-center rounded-md border-2 border-black px-2 text-xs font-black uppercase shadow-brutal-sm",
+            accentMap[accent],
+          )}
+          aria-hidden="true"
+        >
+          {icon}
+        </div>
+        <p className="text-right text-3xl font-black leading-none">
+          {value}
+          {suffix ? (
+            <span className="ml-1 text-lg font-black">{suffix}</span>
+          ) : null}
+        </p>
       </div>
-      <p className="text-3xl font-black leading-none">
-        {value}
-        {suffix ? (
-          <span className="ml-1 text-lg font-black">{suffix}</span>
-        ) : null}
-      </p>
-      <p className="mt-2 text-sm font-semibold text-zinc-600">{label}</p>
+      <p className="text-sm font-semibold leading-5 text-zinc-600">{label}</p>
     </div>
   );
 }
-

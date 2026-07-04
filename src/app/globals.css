@@ -264,4 +264,218 @@
   .accent-blue {
     background: var(--accent-blue);
   }
+
+  /* --- UX animations and hover effects --- */
+
+  /* Text highlights and hover effects */
+  .hover-highlight-yellow {
+    background-image: linear-gradient(
+      120deg,
+      var(--accent-yellow) 0%,
+      var(--accent-yellow) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 0%;
+    background-position: 0 88%;
+    transition: background-size 180ms ease-in-out;
+  }
+  .hover-highlight-yellow:hover,
+  .hover-highlight-yellow:focus-visible {
+    background-size: 100% 38%;
+    outline: none;
+  }
+
+  .hover-highlight-pink {
+    background-image: linear-gradient(
+      120deg,
+      var(--accent-pink) 0%,
+      var(--accent-pink) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 0%;
+    background-position: 0 88%;
+    transition: background-size 180ms ease-in-out;
+  }
+  .hover-highlight-pink:hover,
+  .hover-highlight-pink:focus-visible {
+    background-size: 100% 38%;
+    outline: none;
+  }
+
+  .hover-highlight-blue {
+    background-image: linear-gradient(
+      120deg,
+      var(--accent-blue) 0%,
+      var(--accent-blue) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 0%;
+    background-position: 0 88%;
+    transition: background-size 180ms ease-in-out;
+  }
+  .hover-highlight-blue:hover,
+  .hover-highlight-blue:focus-visible {
+    background-size: 100% 38%;
+    outline: none;
+  }
+
+  .hover-highlight-green {
+    background-image: linear-gradient(
+      120deg,
+      var(--accent-green) 0%,
+      var(--accent-green) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 0%;
+    background-position: 0 88%;
+    transition: background-size 180ms ease-in-out;
+  }
+  .hover-highlight-green:hover,
+  .hover-highlight-green:focus-visible {
+    background-size: 100% 38%;
+    outline: none;
+  }
+
+  .hover-text-yellow {
+    transition: color 180ms ease;
+  }
+  .hover-text-yellow:hover,
+  .hover-text-yellow:focus-visible {
+    color: var(--accent-yellow);
+    outline: none;
+  }
+
+  .hover-text-pink {
+    transition: color 180ms ease;
+  }
+  .hover-text-pink:hover,
+  .hover-text-pink:focus-visible {
+    color: var(--accent-pink);
+    outline: none;
+  }
+
+  .hover-text-blue {
+    transition: color 180ms ease;
+  }
+  .hover-text-blue:hover,
+  .hover-text-blue:focus-visible {
+    color: var(--accent-blue);
+    outline: none;
+  }
+
+  .hover-text-green {
+    transition: color 180ms ease;
+  }
+  .hover-text-green:hover,
+  .hover-text-green:focus-visible {
+    color: var(--accent-green);
+    outline: none;
+  }
+
+  /* Reveal transition base. Content stays visible when client JavaScript is unavailable. */
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 550ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 550ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .reveal.is-ready:not(.is-visible) {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Split/distribute animations for card groups */
+  .split-card-left {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .split-card-center {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .split-card-right {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .reveal.is-ready:not(.is-visible) .split-card-left {
+    opacity: 0;
+    transform: translate3d(-24px, 4px, -10px) rotateY(3deg);
+  }
+  .reveal.is-ready:not(.is-visible) .split-card-center {
+    opacity: 0;
+    transform: translate3d(0, 24px, -10px);
+  }
+  .reveal.is-ready:not(.is-visible) .split-card-right {
+    opacity: 0;
+    transform: translate3d(24px, 4px, -10px) rotateY(-3deg);
+  }
+
+  .reveal.is-visible .split-card-left,
+  .reveal.is-visible .split-card-center,
+  .reveal.is-visible .split-card-right {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateY(0deg);
+  }
+
+  /* Delays for staggered elements inside reveals */
+  .reveal-stagger > *:nth-child(1) {
+    transition-delay: 40ms;
+  }
+  .reveal-stagger > *:nth-child(2) {
+    transition-delay: 120ms;
+  }
+  .reveal-stagger > *:nth-child(3) {
+    transition-delay: 200ms;
+  }
+  .reveal-stagger > *:nth-child(4) {
+    transition-delay: 280ms;
+  }
+  .reveal-stagger > *:nth-child(5) {
+    transition-delay: 360ms;
+  }
+  .reveal-stagger > *:nth-child(6) {
+    transition-delay: 440ms;
+  }
+  .reveal-stagger > *:nth-child(7) {
+    transition-delay: 520ms;
+  }
+
+  @media (max-width: 768px) {
+    .split-card-left,
+    .split-card-right {
+      transform: translate3d(0, 16px, 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal,
+    .split-card-left,
+    .split-card-center,
+    .split-card-right {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+    .is-visible .split-card-left,
+    .is-visible .split-card-center,
+    .is-visible .split-card-right {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
 }

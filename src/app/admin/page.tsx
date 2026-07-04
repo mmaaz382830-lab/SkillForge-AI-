@@ -28,8 +28,8 @@ export default async function AdminPage() {
   return (
     <DashboardShell
       activePath={adminRoutes.admin}
-      description="Protected admin control layer. Monitoring users, usage activity, and logs."
-      title="Admin Control Layer"
+      description="Protected admin area for monitoring users, usage activity, and logs."
+      title="Admin Control"
     >
       {/* Overview Cards */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

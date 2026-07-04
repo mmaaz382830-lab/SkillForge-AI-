@@ -50,7 +50,7 @@ export async function DashboardSidebar({
         {isAdmin && (
           <div className="grid gap-2 border-t-2 border-black pt-4">
             <span className="text-xs font-black uppercase tracking-wider text-zinc-500 px-1">
-              Admin Control Layer
+              Admin Control
             </span>
             <div className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
               {adminNavigation.map((item) => {

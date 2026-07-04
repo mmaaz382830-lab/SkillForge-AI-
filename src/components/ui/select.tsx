@@ -19,7 +19,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           aria-describedby={cn(helperId, errorId) || undefined}
           aria-invalid={error ? true : undefined}
           className={cn(
-            "min-h-11 rounded-md border-2 border-black bg-paper-base px-3 py-2 text-base font-bold shadow-brutal-sm outline-none",
+            "w-full min-h-11 rounded-md border-2 border-black bg-paper-base px-3 py-2 text-base font-bold shadow-brutal-sm outline-none",
             error && "border-state-error bg-accent-pink",
             className,
           )}

@@ -1,5 +1,6 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { Section } from "@/components/layout";
+import { cn } from "@/lib/utils/cn";
 
 const steps = [
   {
@@ -45,25 +46,33 @@ const accentClass = {
 export function HowItWorksSection() {
   return (
     <Section
-      description="A static preview of the future workflow. The backend and AI steps are intentionally not active during Day 2."
+      description="Follow our structured study system to organize your learning and practice efficiently."
       eyebrow="How it works"
       id="how-it-works"
       title="Upload, generate, practice, track."
     >
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {steps.map((step, index) => (
-          <Card className={accentClass[step.accent]} key={step.label}>
-            <CardHeader>
-              <Badge variant={badgeVariant[step.accent]}>
-                {String(index + 1).padStart(2, "0")} · {step.label}
-              </Badge>
-              <CardTitle className="text-xl">{step.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="font-medium leading-7">{step.copy}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {steps.map((step, index) => {
+          const splitClass =
+            index === 0
+              ? "split-card-left"
+              : index === 3
+                ? "split-card-right"
+                : "split-card-center";
+          return (
+            <Card className={cn(accentClass[step.accent], splitClass)} key={step.label}>
+              <CardHeader>
+                <Badge variant={badgeVariant[step.accent]}>
+                  {String(index + 1).padStart(2, "0")} · {step.label}
+                </Badge>
+                <CardTitle className="text-xl">{step.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-medium leading-7">{step.copy}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </Section>
   );

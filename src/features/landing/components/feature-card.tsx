@@ -1,4 +1,10 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 
 type FeatureAccent = "blue" | "yellow" | "green" | "pink" | "dark";
@@ -16,10 +22,13 @@ const accentClasses: Record<FeatureAccent, string> = {
   yellow: "bg-accent-yellow",
   green: "bg-accent-green",
   pink: "bg-accent-pink",
-  dark: "bg-card-dark text-paper-base",
+  dark: "bg-accent-pink text-ink-text",
 };
 
-const badgeVariants: Record<FeatureAccent, "blue" | "yellow" | "green" | "pink" | "dark"> = {
+const badgeVariants: Record<
+  FeatureAccent,
+  "blue" | "yellow" | "green" | "pink" | "dark"
+> = {
   blue: "blue",
   yellow: "yellow",
   green: "green",
@@ -35,10 +44,12 @@ export function FeatureCard({
   className,
 }: FeatureCardProps) {
   return (
-    <Card className={cn("liftable", accentClasses[accent], className)}>
+    <Card className={cn("liftable group", accentClasses[accent], className)}>
       <CardHeader>
         <Badge variant={badgeVariants[accent]}>{label}</Badge>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="transition-colors duration-200 group-hover:text-card-dark">
+          {title}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="font-medium leading-7">{description}</p>

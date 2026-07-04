@@ -172,7 +172,7 @@ export function RoadmapTasksSection({
   return (
     <section aria-labelledby="roadmap-tasks-heading" className="grid gap-5">
       <div className="brutal-card p-5 sm:p-6">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(320px,1fr)] xl:items-start">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.52fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
               Roadmap checklist
@@ -197,7 +197,7 @@ export function RoadmapTasksSection({
             </div>
           </div>
 
-          <div className="rounded-lg border-2 border-black bg-accent-yellow p-4 shadow-brutal">
+          <div className="rounded-lg border-2 border-black bg-accent-yellow p-4 shadow-brutal xl:sticky xl:top-6">
             <h3 className="mb-3 font-heading text-xl font-black">
               Add a task
             </h3>

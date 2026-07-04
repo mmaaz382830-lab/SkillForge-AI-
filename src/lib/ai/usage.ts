@@ -295,7 +295,8 @@ export function getPlanLimit(input: {
   plan?: ProfilePlan | string | null;
   featureType: AiFeatureType;
 }): PlanLimit {
-  return PLAN_USAGE_LIMITS[normalizePlan(input.plan)][input.featureType];
+  const plan = normalizePlan(input.plan);
+  return (PLAN_USAGE_LIMITS as Record<ProfilePlan, Record<AiFeatureType, PlanLimit>>)[plan][input.featureType];
 }
 
 export async function getUsageForPeriod(input: {

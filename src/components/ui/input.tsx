@@ -21,7 +21,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           aria-describedby={cn(helperId, errorId) || undefined}
           aria-invalid={error ? true : undefined}
           className={cn(
-            "min-h-11 rounded-md border-2 border-black bg-paper-base px-3 py-2 text-base font-medium shadow-brutal-sm outline-none placeholder:text-zinc-500",
+            "w-full min-h-11 rounded-md border-2 border-black bg-paper-base px-3 py-2 text-base font-medium shadow-brutal-sm outline-none placeholder:text-zinc-500",
             error && "border-state-error bg-accent-pink",
             className,
           )}

@@ -4,6 +4,7 @@ import { Container } from "@/components/layout";
 import { publicRoutes } from "@/config/routes";
 import { siteConfig } from "@/config/site";
 import { LandingCardPreview } from "./landing-card-preview";
+import { ScrollReveal } from "@/components/ui/scroll-reveal";
 
 const primaryCta =
   "pressable inline-flex min-h-12 items-center justify-center rounded-md bg-card-dark px-6 py-3 text-base font-black leading-none text-paper-base no-underline hover:bg-card-dark";
@@ -13,13 +14,19 @@ const secondaryCta =
 
 export function HeroSection() {
   return (
-    <section className="py-12 sm:py-16 lg:py-20">
+    <section className="py-12 sm:py-16 lg:py-20 overflow-hidden">
       <Container className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="grid gap-6">
-          <Badge variant="yellow">Digital study desk</Badge>
+        <ScrollReveal stagger className="grid gap-6">
+          <div>
+            <Badge variant="yellow">Digital study desk</Badge>
+          </div>
           <h1>
-            Turn messy notes into a{" "}
-            <span className="inline-block -rotate-1 bg-accent-yellow px-2">
+            Turn{" "}
+            <span className="hover-highlight-pink transition-all duration-200 cursor-default px-1 inline-block">
+              messy notes
+            </span>{" "}
+            into a{" "}
+            <span className="inline-block -rotate-1 bg-accent-yellow px-2 hover-highlight-green transition-all duration-200 cursor-default">
               learning system.
             </span>
           </h1>
@@ -36,7 +43,7 @@ export function HeroSection() {
               See How It Works
             </Link>
           </div>
-        </div>
+        </ScrollReveal>
         <LandingCardPreview />
       </Container>
     </section>

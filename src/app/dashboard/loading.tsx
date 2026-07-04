@@ -19,7 +19,7 @@ export default function DashboardLoading() {
         ))}
       </section>
       <LoadingState
-        description="Fetching your Day 4 goals, roadmaps, tasks, and progress totals."
+        description="Fetching your goals, roadmaps, tasks, and progress totals."
         title="Loading dashboard progress..."
       />
     </DashboardShell>

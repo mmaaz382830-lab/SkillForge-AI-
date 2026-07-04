@@ -2,7 +2,6 @@ import { adminRoutes, dashboardRoutes, publicRoutes } from "@/config/routes";
 
 export const publicNavigation = [
   { label: "Features", href: publicRoutes.features },
-  { label: "Pricing", href: publicRoutes.pricing },
   { label: "Login", href: publicRoutes.login },
 ] as const;
 

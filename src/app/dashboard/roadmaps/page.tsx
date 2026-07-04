@@ -6,6 +6,7 @@ import { dashboardRoutes } from "@/config/routes";
 import { siteConfig } from "@/config/site";
 import { LearningGoalsSection } from "@/features/roadmaps/components/learning-goals-section";
 import { RoadmapsSection } from "@/features/roadmaps/components/roadmaps-section";
+import { getCurrentProfile } from "@/lib/auth/session";
 import { listCompletedMaterialRoadmapOptions } from "@/lib/materials/queries";
 import { listLearningGoals, listRoadmapViews } from "@/lib/roadmaps/queries";
 import type {
@@ -40,10 +41,11 @@ function toGoalOption(goal: LearningGoal): LearningGoalOption {
 }
 
 export default async function RoadmapsPage() {
-  const [goalsResult, roadmapsResult, materialsResult] = await Promise.all([
+  const [goalsResult, roadmapsResult, materialsResult, profile] = await Promise.all([
     listLearningGoals(),
     listRoadmapViews(),
     listCompletedMaterialRoadmapOptions(),
+    getCurrentProfile(),
   ]);
   const goalOptions = goalsResult.ok ? goalsResult.data.map(toGoalOption) : [];
 
@@ -72,6 +74,7 @@ export default async function RoadmapsPage() {
           goals={goalOptions}
           materials={materialsResult.ok ? materialsResult.data : []}
           roadmaps={roadmapsResult.data}
+          defaultRoadmapDifficulty={profile?.default_roadmap_difficulty ?? "beginner"}
         />
       )}
     </DashboardShell>

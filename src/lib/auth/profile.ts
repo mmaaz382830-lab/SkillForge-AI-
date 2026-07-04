@@ -62,7 +62,7 @@ export async function ensureProfileForUser(
   const { data: existingProfile, error: loadError } = await supabase
     .from("profiles")
     .select(
-      "id,email,full_name,avatar_url,role,plan,last_active_at,created_at,updated_at",
+      "id,email,full_name,avatar_url,role,plan,default_quiz_difficulty,default_roadmap_difficulty,last_active_at,created_at,updated_at",
     )
     .eq("id", user.id)
     .maybeSingle<Profile>();
@@ -88,7 +88,7 @@ export async function ensureProfileForUser(
       .update(updatePayload)
       .eq("id", user.id)
       .select(
-        "id,email,full_name,avatar_url,role,plan,last_active_at,created_at,updated_at",
+        "id,email,full_name,avatar_url,role,plan,default_quiz_difficulty,default_roadmap_difficulty,last_active_at,created_at,updated_at",
       )
       .maybeSingle<Profile>();
 
@@ -109,7 +109,7 @@ export async function ensureProfileForUser(
     .from("profiles")
     .insert(getProfileSeedFromUser(user))
     .select(
-      "id,email,full_name,avatar_url,role,plan,last_active_at,created_at,updated_at",
+      "id,email,full_name,avatar_url,role,plan,default_quiz_difficulty,default_roadmap_difficulty,last_active_at,created_at,updated_at",
     )
     .maybeSingle<Profile>();
 
@@ -123,7 +123,7 @@ export async function ensureProfileForUser(
   const { data: raceLoadedProfile } = await supabase
     .from("profiles")
     .select(
-      "id,email,full_name,avatar_url,role,plan,last_active_at,created_at,updated_at",
+      "id,email,full_name,avatar_url,role,plan,default_quiz_difficulty,default_roadmap_difficulty,last_active_at,created_at,updated_at",
     )
     .eq("id", user.id)
     .maybeSingle<Profile>();

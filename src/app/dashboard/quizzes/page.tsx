@@ -5,6 +5,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { dashboardRoutes } from "@/config/routes";
 import { siteConfig } from "@/config/site";
 import { QuizzesSection } from "@/features/quizzes/components/quizzes-section";
+import { getCurrentProfile } from "@/lib/auth/session";
 import { listCompletedMaterialRoadmapOptions } from "@/lib/materials/queries";
 import { listQuizViews } from "@/lib/quizzes/queries";
 
@@ -14,14 +15,11 @@ export const metadata: Metadata = {
     "Practice with AI-generated multiple-choice quizzes from your uploaded notes.",
 };
 
-/**
- * /dashboard/quizzes — AI quiz generation, list, and preview.
- * No quiz attempt, scoring, or wrong-answer review (Day 8).
- */
 export default async function QuizzesPage() {
-  const [quizzesResult, materialsResult] = await Promise.all([
+  const [quizzesResult, materialsResult, profile] = await Promise.all([
     listQuizViews(),
     listCompletedMaterialRoadmapOptions(),
+    getCurrentProfile(),
   ]);
 
   return (
@@ -39,6 +37,7 @@ export default async function QuizzesPage() {
         <QuizzesSection
           quizzes={quizzesResult.data}
           materials={materialsResult.ok ? materialsResult.data : []}
+          defaultQuizDifficulty={profile?.default_quiz_difficulty ?? "beginner"}
         />
       )}
     </DashboardShell>

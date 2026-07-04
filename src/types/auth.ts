@@ -12,6 +12,8 @@ export type Profile = {
   last_active_at: string | null;
   created_at: string;
   updated_at: string;
+  default_quiz_difficulty?: "beginner" | "intermediate" | "advanced" | null;
+  default_roadmap_difficulty?: "beginner" | "intermediate" | "advanced" | null;
 };
 
 export type AuthActionResult = {

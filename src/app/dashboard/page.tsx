@@ -64,7 +64,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           Upload material
         </Link>
       }
-      description="Your protected SkillForge workspace tracks roadmaps and private materials. AI generation and RAG actions remain clearly marked for later phases."
+      description="Track your materials, roadmaps, flashcards, quizzes, interviews, and progress from one protected learning workspace."
       title="Dashboard"
     >
       <AuthMessage auth={params.auth} reason={params.reason} />
@@ -80,52 +80,73 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             aria-label="Dashboard progress summary"
             className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
           >
+            {/* Learning Momentum / Your Study Progress Panel */}
+            <div className="brutal-card bg-paper-base p-5 sm:col-span-2 flex flex-col justify-between border-2 border-black shadow-brutal-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-600 bg-accent-green/20 px-2 py-0.5 rounded border border-black">
+                    Learning Momentum
+                  </span>
+                  <h3 className="mt-2 font-heading text-xl font-black">Your Study Progress</h3>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-md border-2 border-black bg-accent-green px-2 text-xs font-black shadow-brutal-sm">
+                  📈
+                </div>
+              </div>
+              
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between text-sm font-bold">
+                  <span>Overall roadmap completion</span>
+                  <span className="font-black text-accent-green">{dashboardResult.data.overall_progress_percentage}%</span>
+                </div>
+                <div className="h-3 w-full rounded-full border-2 border-black bg-paper-muted overflow-hidden">
+                  <div
+                    className="h-full bg-accent-green border-r border-black transition-all duration-300"
+                    style={{ width: `${dashboardResult.data.overall_progress_percentage}%` }}
+                  />
+                </div>
+                <p className="text-xs font-semibold text-zinc-500">
+                  {dashboardResult.data.completed_task_count} of {dashboardResult.data.roadmap_task_count} tasks completed across your roadmaps
+                </p>
+              </div>
+            </div>
+
             <DashboardStatCard
               accent="yellow"
               label="Learning goals"
               value={dashboardResult.data.learning_goal_count}
+              icon="🎯"
             />
             <DashboardStatCard
               accent="blue"
               label="Materials uploaded"
               value={dashboardResult.data.material_count}
+              icon="📚"
             />
             <DashboardStatCard
               accent="yellow"
               label="Roadmaps"
               value={dashboardResult.data.roadmap_count}
-            />
-            <DashboardStatCard
-              accent="blue"
-              label="Roadmap tasks"
-              value={dashboardResult.data.roadmap_task_count}
-            />
-            <DashboardStatCard
-              accent="green"
-              label="Tasks completed"
-              value={dashboardResult.data.completed_task_count}
+              icon="🗺️"
             />
             <DashboardStatCard
               accent="pink"
               label="Quiz attempts"
               value={dashboardResult.data.quiz_attempt_count}
+              icon="✏️"
             />
             <DashboardStatCard
               accent="pink"
               label="Latest quiz score"
               suffix={dashboardResult.data.latest_quiz_score == null ? undefined : "%"}
               value={dashboardResult.data.latest_quiz_score ?? "-"}
+              icon="🏆"
             />
             <DashboardStatCard
               accent="green"
               label="Interviews completed"
               value={dashboardResult.data.completed_interview_count}
-            />
-            <DashboardStatCard
-              accent="green"
-              label="Overall roadmap progress"
-              suffix="%"
-              value={dashboardResult.data.overall_progress_percentage}
+              icon="💬"
             />
           </section>
 
@@ -191,7 +212,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <QuickActionCard
             accent="blue"
-            description="Upload PDF/TXT files or paste notes for future study tools."
+            description="Upload PDF/TXT files or paste notes for your study tools."
             emoji="M"
             href={dashboardRoutes.materials}
             label="Upload material"

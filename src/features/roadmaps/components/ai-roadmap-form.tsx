@@ -18,6 +18,7 @@ type AiRoadmapFormProps = {
   materials: MaterialRoadmapOption[];
   onSubmit: (input: AiRoadmapGenerationInput) => Promise<boolean>;
   pending?: boolean;
+  defaultDifficulty?: DifficultyLevel;
 };
 
 function readFormValue(formData: FormData, key: string): string {
@@ -31,6 +32,7 @@ export function AiRoadmapForm({
   materials,
   onSubmit,
   pending = false,
+  defaultDifficulty = "beginner",
 }: AiRoadmapFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const formId = useId();
@@ -66,7 +68,7 @@ export function AiRoadmapForm({
   }
 
   return (
-    <form className="grid gap-4" onSubmit={handleSubmit} ref={formRef}>
+    <form className="grid min-w-0 gap-4" onSubmit={handleSubmit} ref={formRef}>
       {clientError ? (
         <p
           className="rounded-md border-2 border-black bg-accent-pink px-3 py-2 text-sm font-black"
@@ -76,7 +78,7 @@ export function AiRoadmapForm({
         </p>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2">
         <Select
           disabled={pending}
           helperText={
@@ -127,9 +129,9 @@ export function AiRoadmapForm({
         rows={3}
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid min-w-0 gap-4 md:grid-cols-3">
         <Select
-          defaultValue="beginner"
+          defaultValue={defaultDifficulty}
           disabled={pending}
           id={`${formId}-difficulty`}
           label="Difficulty"

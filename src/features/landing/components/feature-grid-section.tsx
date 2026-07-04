@@ -4,45 +4,45 @@ import { FeatureCard } from "./feature-card";
 const features = [
   {
     title: "Materials",
-    label: "Blue",
+    label: "SOURCE MATERIALS",
     accent: "blue",
-    description: "Upload PDFs, text notes, or pasted study material as the future source layer.",
+    description: "Upload PDFs, text notes, or pasted study material as your private source layer.",
   },
   {
     title: "Roadmaps",
-    label: "Yellow",
+    label: "LEARNING PLAN",
     accent: "yellow",
-    description: "Generate a clear roadmap before you start randomly studying.",
+    description: "Turn your notes and goals into a clear checklist for what to learn next.",
   },
   {
     title: "Flashcards",
-    label: "Green",
+    label: "ACTIVE RECALL",
     accent: "green",
-    description: "Practice recall with physical-feeling revision cards.",
+    description: "Practice recall with focused front/back cards generated from your material.",
   },
   {
     title: "Quizzes",
-    label: "Pink",
+    label: "PRACTICE TESTS",
     accent: "pink",
-    description: "Check understanding with question cards and visible explanations.",
+    description: "Check understanding with multiple-choice questions and answer review.",
   },
   {
     title: "Interview",
-    label: "Pink + black",
+    label: "INTERVIEW PREP",
     accent: "dark",
-    description: "Practice explaining concepts with structured mock interview prompts.",
+    description: "Practice technical explanations with structured mock questions and feedback.",
   },
   {
     title: "RAG Chat",
-    label: "Blue",
+    label: "NOTE CHAT",
     accent: "blue",
-    description: "Designed for note-grounded answers from uploaded material.",
+    description: "Ask questions from your prepared notes and keep answers tied to your material.",
   },
   {
     title: "Progress",
-    label: "Green",
+    label: "LEARNING MOMENTUM",
     accent: "green",
-    description: "Track roadmap tasks, practice attempts, and learning momentum.",
+    description: "Track roadmap tasks, practice attempts, and learning momentum in one place.",
   },
 ] as const;
 
@@ -56,15 +56,24 @@ export function FeatureGridSection() {
       variant="muted"
     >
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {features.map((feature) => (
-          <FeatureCard
-            accent={feature.accent}
-            description={feature.description}
-            key={feature.title}
-            label={feature.label}
-            title={feature.title}
-          />
-        ))}
+        {features.map((feature, index) => {
+          const splitClass =
+            index % 3 === 0
+              ? "split-card-left"
+              : index % 3 === 1
+                ? "split-card-center"
+                : "split-card-right";
+          return (
+            <FeatureCard
+              accent={feature.accent}
+              description={feature.description}
+              key={feature.title}
+              label={feature.label}
+              title={feature.title}
+              className={splitClass}
+            />
+          );
+        })}
       </div>
     </Section>
   );

@@ -1,7 +1,6 @@
 export const publicRoutes = {
   home: "/",
-  features: "/features",
-  pricing: "/pricing",
+  features: "/#features",
   login: "/login",
   signup: "/signup",
   forgotPassword: "/forgot-password",
