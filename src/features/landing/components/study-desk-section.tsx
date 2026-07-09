@@ -17,7 +17,7 @@ export function StudyDeskSection() {
       eyebrow="Learning modes"
       title="A digital study desk, not another chat box."
     >
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-5">
         {deskCards.map(([title, copy], index) => {
           const splitClass =
             index < 2
@@ -27,7 +27,7 @@ export function StudyDeskSection() {
                 : "split-card-right";
           return (
             <div
-              className={cn("brutal-card liftable bg-paper-base p-5", splitClass)}
+              className={cn("brutal-card liftable bg-paper-base p-4 sm:p-5", splitClass)}
               key={title}
             >
               <Badge
@@ -43,7 +43,7 @@ export function StudyDeskSection() {
               >
                 {title}
               </Badge>
-              <p className="mt-5 font-black leading-7">{copy}</p>
+              <p className="mt-4 font-black leading-7 sm:mt-5">{copy}</p>
             </div>
           );
         })}

@@ -44,7 +44,7 @@ export function FeatureCard({
   className,
 }: FeatureCardProps) {
   return (
-    <Card className={cn("liftable group", accentClasses[accent], className)}>
+    <Card className={cn("liftable group min-w-0", accentClasses[accent], className)}>
       <CardHeader>
         <Badge variant={badgeVariants[accent]}>{label}</Badge>
         <CardTitle className="transition-colors duration-200 group-hover:text-card-dark">

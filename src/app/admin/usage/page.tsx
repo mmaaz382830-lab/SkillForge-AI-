@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
   Badge,
+  MobileDataCard,
+  MobileDataField,
+  MobileDataList,
   Table,
   TableBody,
   TableCell,
@@ -41,13 +44,13 @@ export default async function AdminUsagePage() {
       {usageLogs.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2">
           {/* Feature Distribution */}
-          <div className="brutal-card bg-paper-base p-6">
+          <div className="brutal-card min-w-0 bg-paper-base p-4 sm:p-6">
             <h4 className="font-heading text-lg font-black mb-3">Feature Distribution</h4>
             <div className="flex flex-wrap gap-3">
               {Object.entries(countsByFeature).map(([feature, count]) => (
                 <div
                   key={feature}
-                  className="flex items-center gap-2 border-2 border-black bg-paper-muted px-3 py-1.5 rounded-md"
+                  className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border-2 border-black bg-paper-muted px-3 py-1.5"
                 >
                   <Badge variant="blue">{feature}</Badge>
                   <span className="text-sm font-black">× {count}</span>
@@ -57,13 +60,13 @@ export default async function AdminUsagePage() {
           </div>
 
           {/* Status Distribution */}
-          <div className="brutal-card bg-paper-base p-6">
+          <div className="brutal-card min-w-0 bg-paper-base p-4 sm:p-6">
             <h4 className="font-heading text-lg font-black mb-3">Status Distribution</h4>
             <div className="flex flex-wrap gap-3">
               {Object.entries(countsByStatus).map(([status, count]) => (
                 <div
                   key={status}
-                  className="flex items-center gap-2 border-2 border-black bg-paper-muted px-3 py-1.5 rounded-md"
+                  className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border-2 border-black bg-paper-muted px-3 py-1.5"
                 >
                   <Badge
                     variant={
@@ -85,7 +88,7 @@ export default async function AdminUsagePage() {
       )}
 
       {/* Main Table */}
-      <div className="brutal-card bg-paper-base p-6">
+      <div className="brutal-card min-w-0 bg-paper-base p-4 sm:p-6">
         <h3 className="font-heading text-xl font-black mb-4">
           Recent Usage Events ({usageLogs.length})
         </h3>
@@ -100,7 +103,43 @@ export default async function AdminUsagePage() {
             </p>
           </div>
         ) : (
-          <div className="w-full">
+          <>
+            <MobileDataList>
+              {usageLogs.map((log) => (
+                <MobileDataCard key={log.id}>
+                  <dl className="grid min-w-0 grid-cols-2 gap-3">
+                    <MobileDataField className="col-span-2" label="User">
+                      <span className="break-words [overflow-wrap:anywhere]">
+                        {log.profiles?.email ?? log.user_id ?? "Anonymous"}
+                      </span>
+                    </MobileDataField>
+                    <MobileDataField label="Feature">
+                      <Badge variant="blue">{log.feature_type}</Badge>
+                    </MobileDataField>
+                    <MobileDataField label="Status">
+                      <Badge
+                        variant={
+                          log.status === "success"
+                            ? "success"
+                            : log.status === "blocked"
+                              ? "warning"
+                              : "error"
+                        }
+                      >
+                        {log.status}
+                      </Badge>
+                    </MobileDataField>
+                    <MobileDataField label="Period">
+                      <span className="font-mono text-xs">{log.period_key}</span>
+                    </MobileDataField>
+                    <MobileDataField label="Created">
+                      {new Date(log.created_at).toLocaleString()}
+                    </MobileDataField>
+                  </dl>
+                </MobileDataCard>
+              ))}
+            </MobileDataList>
+            <div className="hidden w-full min-w-0 md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -143,7 +182,8 @@ export default async function AdminUsagePage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
+            </div>
+          </>
         )}
       </div>
     </DashboardShell>

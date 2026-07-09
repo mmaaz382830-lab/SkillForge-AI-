@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
   Badge,
+  MobileDataCard,
+  MobileDataField,
+  MobileDataList,
   Table,
   TableBody,
   TableCell,
@@ -32,7 +35,53 @@ export default async function AdminLogsPage() {
           <p className="text-sm font-black uppercase text-zinc-500">No API logs available</p>
         </div>
       ) : (
-        <Table>
+        <>
+          <MobileDataList>
+            {data.apiLogs.map((log) => (
+              <MobileDataCard key={log.id}>
+                <dl className="grid min-w-0 grid-cols-2 gap-3">
+                  <MobileDataField className="col-span-2" label="User / caller">
+                    <span className="break-words [overflow-wrap:anywhere]">
+                      {log.profiles?.email ?? log.user_id ?? "Anonymous"}
+                    </span>
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Route / method">
+                    <span className="break-words font-mono text-xs [overflow-wrap:anywhere]">
+                      <strong className="mr-2 inline-block rounded border-2 border-black bg-paper-muted px-1.5 py-0.5 uppercase">
+                        {log.method ?? "POST"}
+                      </strong>
+                      {log.route}
+                    </span>
+                  </MobileDataField>
+                  <MobileDataField label="Feature">
+                    {log.feature_type ? <Badge variant="blue">{log.feature_type}</Badge> : "—"}
+                  </MobileDataField>
+                  <MobileDataField label="Status">
+                    <Badge
+                      variant={
+                        log.status === "success"
+                          ? "success"
+                          : log.status === "blocked"
+                            ? "warning"
+                            : "error"
+                      }
+                    >
+                      {log.status}
+                    </Badge>
+                  </MobileDataField>
+                  <MobileDataField label="Code">{log.status_code ?? "—"}</MobileDataField>
+                  <MobileDataField label="Latency">
+                    {log.duration_ms !== null ? `${log.duration_ms}ms` : "—"}
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Created">
+                    {new Date(log.created_at).toLocaleString()}
+                  </MobileDataField>
+                </dl>
+              </MobileDataCard>
+            ))}
+          </MobileDataList>
+          <div className="hidden min-w-0 md:block">
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead>User / Caller</TableHead>
@@ -84,7 +133,9 @@ export default async function AdminLogsPage() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+          </Table>
+          </div>
+        </>
       )}
     </div>
   );
@@ -98,7 +149,44 @@ export default async function AdminLogsPage() {
           <p className="text-sm font-black uppercase text-zinc-500">No error logs available</p>
         </div>
       ) : (
-        <Table>
+        <>
+          <MobileDataList>
+            {data.errorLogs.map((log) => (
+              <MobileDataCard key={log.id}>
+                <dl className="grid min-w-0 grid-cols-2 gap-3">
+                  <MobileDataField label="Severity">
+                    <Badge variant={log.severity === "error" ? "error" : "warning"}>
+                      {log.severity}
+                    </Badge>
+                  </MobileDataField>
+                  <MobileDataField label="Feature">
+                    {log.feature_type ? <Badge variant="blue">{log.feature_type}</Badge> : "—"}
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="User">
+                    <span className="break-words [overflow-wrap:anywhere]">
+                      {log.profiles?.email ?? log.user_id ?? "System"}
+                    </span>
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Category / source">
+                    <span className="block font-black uppercase text-zinc-600">{log.category}</span>
+                    {log.source ? (
+                      <span className="block break-words font-mono text-xs [overflow-wrap:anywhere]">
+                        {log.source}
+                      </span>
+                    ) : null}
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Safe message">
+                    {log.safe_message}
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Created">
+                    {new Date(log.created_at).toLocaleString()}
+                  </MobileDataField>
+                </dl>
+              </MobileDataCard>
+            ))}
+          </MobileDataList>
+          <div className="hidden min-w-0 md:block">
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Severity</TableHead>
@@ -138,7 +226,9 @@ export default async function AdminLogsPage() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+          </Table>
+          </div>
+        </>
       )}
     </div>
   );
@@ -152,7 +242,41 @@ export default async function AdminLogsPage() {
           <p className="text-sm font-black uppercase text-zinc-500">No admin actions recorded</p>
         </div>
       ) : (
-        <Table>
+        <>
+          <MobileDataList>
+            {data.adminActions.map((log) => (
+              <MobileDataCard key={log.id}>
+                <dl className="grid min-w-0 grid-cols-2 gap-3">
+                  <MobileDataField className="col-span-2" label="Admin user">
+                    <span className="break-words [overflow-wrap:anywhere]">
+                      {log.admin_profiles?.email ?? log.admin_user_id ?? "Unknown Admin"}
+                    </span>
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Action">
+                    <Badge variant="yellow">{log.action}</Badge>
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Target user">
+                    <span className="break-words [overflow-wrap:anywhere]">
+                      {log.target_profiles?.email ?? log.target_user_id ?? "—"}
+                    </span>
+                  </MobileDataField>
+                  <MobileDataField label="Target type">
+                    {log.target_type ?? "—"}
+                  </MobileDataField>
+                  <MobileDataField label="Target ID">
+                    <span className="break-words font-mono text-xs [overflow-wrap:anywhere]">
+                      {log.target_id ?? "—"}
+                    </span>
+                  </MobileDataField>
+                  <MobileDataField className="col-span-2" label="Created">
+                    {new Date(log.created_at).toLocaleString()}
+                  </MobileDataField>
+                </dl>
+              </MobileDataCard>
+            ))}
+          </MobileDataList>
+          <div className="hidden min-w-0 md:block">
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Admin User</TableHead>
@@ -190,7 +314,9 @@ export default async function AdminLogsPage() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+          </Table>
+          </div>
+        </>
       )}
     </div>
   );
@@ -208,7 +334,7 @@ export default async function AdminLogsPage() {
       description="View recent system runtime logs, exceptions, and logged admin audit operations."
       title="System Audit Logs"
     >
-      <div className="w-full">
+      <div className="w-full min-w-0 max-w-full">
         <Tabs items={tabItems} defaultValue="api" />
       </div>
     </DashboardShell>

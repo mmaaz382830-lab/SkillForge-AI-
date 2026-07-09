@@ -60,6 +60,11 @@
     box-sizing: border-box;
   }
 
+  #__next,
+  [data-nextjs-root] {
+    min-width: 0;
+  }
+
   html {
     min-height: 100%;
     background: var(--paper-base);
@@ -70,6 +75,7 @@
 
   body {
     width: 100%;
+    max-width: 100%;
     min-height: 100%;
     overflow-x: hidden;
     background:
@@ -122,6 +128,13 @@
 
   p {
     max-width: 70ch;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
   }
 
   a {
@@ -208,6 +221,7 @@
     border-radius: var(--radius-sf-lg);
     box-shadow: var(--shadow-hard-md);
     background: var(--paper-base);
+    max-width: 100%;
   }
 
   .pressable {
@@ -456,9 +470,33 @@
   }
 
   @media (max-width: 768px) {
+    :root {
+      --shadow-hard-md: 3px 3px 0 #000000;
+      --shadow-hard-lg: 4px 4px 0 #000000;
+    }
+
     .split-card-left,
+    .split-card-center,
     .split-card-right {
-      transform: translate3d(0, 16px, 0);
+      transform: none;
+    }
+
+    .reveal.is-ready:not(.is-visible) .split-card-left,
+    .reveal.is-ready:not(.is-visible) .split-card-center,
+    .reveal.is-ready:not(.is-visible) .split-card-right {
+      transform: translateY(12px);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .liftable:hover {
+      box-shadow: var(--shadow-hard-md);
+      transform: none;
+    }
+
+    .pressable:hover {
+      box-shadow: var(--shadow-hard-md);
+      transform: none;
     }
   }
 

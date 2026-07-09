@@ -5,6 +5,7 @@ export * from "./dropdown";
 export * from "./file-dropzone";
 export * from "./input";
 export * from "./modal";
+export * from "./mobile-data-card";
 export * from "./progress";
 export * from "./select";
 export * from "./skeleton";

@@ -7,7 +7,7 @@ export function Card({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("brutal-card overflow-hidden p-5 sm:p-6", className)}
+      className={cn("brutal-card min-w-0 overflow-hidden p-4 sm:p-6", className)}
       {...props}
     />
   );
@@ -26,7 +26,7 @@ export function CardTitle({
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
-      className={cn("text-2xl font-black leading-tight", className)}
+      className={cn("text-xl font-black leading-tight sm:text-2xl", className)}
       {...props}
     />
   );
@@ -45,7 +45,7 @@ export function CardContent({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("mt-5", className)} {...props} />;
+  return <div className={cn("mt-4 sm:mt-5", className)} {...props} />;
 }
 
 export function CardFooter({

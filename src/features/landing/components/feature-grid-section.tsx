@@ -55,7 +55,7 @@ export function FeatureGridSection() {
       title="Everything points back to study practice."
       variant="muted"
     >
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
         {features.map((feature, index) => {
           const splitClass =
             index % 3 === 0

@@ -32,19 +32,19 @@ export function Section({
   ...props
 }: SectionProps) {
   return (
-    <section className={cn("py-12 sm:py-16 overflow-hidden", variantClasses[variant], className)} {...props}>
+    <section className={cn("overflow-x-clip py-12 sm:py-16", variantClasses[variant], className)} {...props}>
       <ScrollReveal>
-        <Container className="grid gap-8">
+        <Container className="grid min-w-0 gap-6 sm:gap-8">
           {eyebrow || title || description ? (
-            <div className="grid max-w-3xl gap-4">
+            <div className="grid min-w-0 max-w-3xl gap-3 sm:gap-4">
               {eyebrow ? <Badge variant="yellow">{eyebrow}</Badge> : null}
               {title ? (
-                <h2 className="hover-highlight-yellow cursor-default inline-block w-fit transition-all duration-200">
+                <h2 className="hover-highlight-yellow inline-block max-w-full cursor-default transition-all duration-200">
                   {title}
                 </h2>
               ) : null}
               {description ? (
-                <p className="text-lg font-medium leading-8">{description}</p>
+                <p className="text-base font-medium leading-7 sm:text-lg sm:leading-8">{description}</p>
               ) : null}
             </div>
           ) : null}

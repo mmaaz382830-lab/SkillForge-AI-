@@ -2,6 +2,7 @@ export * from "./app-logo";
 export * from "./container";
 export * from "./dashboard-shell";
 export * from "./dashboard-sidebar";
+export * from "./dashboard-nav-client";
 export * from "./dashboard-topbar";
 export * from "./page-header";
 export * from "./public-footer";

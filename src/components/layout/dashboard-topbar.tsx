@@ -30,14 +30,16 @@ export function DashboardTopbar({
           <p className="text-xs font-black uppercase">Study desk</p>
           <h1 className="text-3xl sm:text-4xl">{title}</h1>
           {description ? (
-            <p className="max-w-3xl text-base font-medium leading-7">
+            <p className="max-w-3xl break-words text-base font-medium leading-7">
               {description}
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           {actions}
-          <Badge variant="green">{accountLabel}</Badge>
+          <Badge className="max-w-full whitespace-normal break-words leading-4 normal-case" variant="green">
+            {accountLabel}
+          </Badge>
           <form action={signOutAndRedirect}>
             <Button type="submit" variant="ghost" size="sm">
               Sign out

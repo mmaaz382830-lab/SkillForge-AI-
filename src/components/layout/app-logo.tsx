@@ -12,8 +12,8 @@ type AppLogoProps = {
 };
 
 const markSizeClasses = {
-  sm: "h-10 w-10",
-  md: "h-11 w-11",
+  sm: "h-9 w-9 sm:h-10 sm:w-10",
+  md: "h-10 w-10 sm:h-11 sm:w-11",
 } as const;
 
 export function AppLogo({
@@ -23,7 +23,7 @@ export function AppLogo({
   markSize = "md",
 }: AppLogoProps) {
   const content = (
-    <span className="inline-flex items-center gap-3 align-middle">
+    <span className="inline-flex min-w-0 items-center gap-2 align-middle sm:gap-3">
       <span
         className={cn(
           "relative block shrink-0 overflow-hidden rounded-md",
@@ -39,11 +39,11 @@ export function AppLogo({
         />
       </span>
       {!compact ? (
-        <span className="grid leading-none">
-          <span className="font-heading text-xl font-black tracking-normal">
+        <span className="grid min-w-0 leading-none">
+          <span className="font-heading text-lg font-black tracking-normal sm:text-xl">
             {siteConfig.name}
           </span>
-          <span className="text-xs font-black uppercase tracking-normal">
+          <span className="text-[0.65rem] font-black uppercase tracking-normal sm:text-xs">
             Learning system
           </span>
         </span>
@@ -52,7 +52,7 @@ export function AppLogo({
   );
 
   const classes = cn(
-    "inline-flex w-fit items-center rounded-md text-ink-text no-underline hover:bg-transparent",
+    "inline-flex min-w-0 max-w-full items-center rounded-md text-ink-text no-underline hover:bg-transparent",
     className,
   );
 

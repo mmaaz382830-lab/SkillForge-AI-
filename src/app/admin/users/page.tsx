@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
   Badge,
+  MobileDataCard,
+  MobileDataField,
+  MobileDataList,
   Table,
   TableBody,
   TableCell,
@@ -35,7 +38,7 @@ export default async function AdminUsersPage() {
       description="Registered user profiles, roles, subscription plans, and activity status."
       title="User Management"
     >
-      <div className="brutal-card bg-paper-base p-6">
+      <div className="brutal-card min-w-0 bg-paper-base p-4 sm:p-6">
         <h3 className="font-heading text-xl font-black mb-4">
           All Users ({users.length})
         </h3>
@@ -50,7 +53,56 @@ export default async function AdminUsersPage() {
             </p>
           </div>
         ) : (
-          <div className="w-full">
+          <>
+            <MobileDataList>
+              {users.map((user) => (
+                <MobileDataCard key={user.id}>
+                  <dl className="grid min-w-0 grid-cols-2 gap-3">
+                    <MobileDataField className="col-span-2" label="Email">
+                      <span className="break-words [overflow-wrap:anywhere]">{user.email}</span>
+                    </MobileDataField>
+                    <MobileDataField className="col-span-2" label="Full name">
+                      {user.full_name ?? "—"}
+                    </MobileDataField>
+                    <MobileDataField label="Role">
+                      <Badge
+                        variant={
+                          user.role === "admin"
+                            ? "yellow"
+                            : user.role === "blocked"
+                              ? "error"
+                              : "neutral"
+                        }
+                      >
+                        {user.role}
+                      </Badge>
+                    </MobileDataField>
+                    <MobileDataField label="Plan">
+                      <Badge
+                        variant={
+                          user.plan === "pro"
+                            ? "green"
+                            : user.plan === "demo_admin"
+                              ? "blue"
+                              : "neutral"
+                        }
+                      >
+                        {formatPlan(user.plan)}
+                      </Badge>
+                    </MobileDataField>
+                    <MobileDataField label="Created">
+                      {new Date(user.created_at).toLocaleString()}
+                    </MobileDataField>
+                    <MobileDataField label="Last active">
+                      {user.last_active_at
+                        ? new Date(user.last_active_at).toLocaleString()
+                        : "Never"}
+                    </MobileDataField>
+                  </dl>
+                </MobileDataCard>
+              ))}
+            </MobileDataList>
+            <div className="hidden w-full min-w-0 md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -105,7 +157,8 @@ export default async function AdminUsersPage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
+            </div>
+          </>
         )}
       </div>
     </DashboardShell>

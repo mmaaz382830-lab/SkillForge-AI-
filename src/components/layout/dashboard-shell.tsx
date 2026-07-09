@@ -38,7 +38,7 @@ export async function DashboardShell({
   const user = await getCurrentUser();
 
   return (
-    <div className="min-h-screen bg-paper-base text-ink-text lg:flex">
+    <div className="min-h-screen w-full min-w-0 max-w-full bg-paper-base text-ink-text lg:flex">
       <DashboardSidebar activePath={activePath} />
       <div className="min-w-0 flex-1">
         <DashboardTopbar
@@ -47,7 +47,7 @@ export async function DashboardShell({
           accountLabel={getUserDisplayLabel(user)}
           title={title}
         />
-        <main className={cn("mx-auto grid max-w-7xl gap-6 p-4 sm:p-6 lg:p-8", className)}>
+        <main className={cn("mx-auto grid w-full min-w-0 max-w-7xl gap-6 p-4 sm:p-6 lg:p-8", className)}>
           {children}
         </main>
       </div>
