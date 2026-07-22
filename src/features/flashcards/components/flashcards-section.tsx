@@ -333,7 +333,7 @@ export function FlashcardsSection({ decks, materials }: FlashcardsSectionProps) 
   return (
     <section aria-labelledby="flashcards-heading" className="grid gap-5">
       <div className="brutal-card p-5 sm:p-6">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
               Flashcard studio

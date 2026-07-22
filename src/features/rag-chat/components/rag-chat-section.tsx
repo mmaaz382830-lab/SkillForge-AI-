@@ -677,7 +677,7 @@ export function RagChatSection({
                         key={session.id}
                       >
                         {isRenaming ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <input
                               className="min-w-0 flex-1 rounded border border-black bg-paper-base px-2 py-1 text-xs font-black focus:outline-none"
                               maxLength={80}
@@ -754,7 +754,7 @@ export function RagChatSection({
           </aside>
 
           {/* ── Main chat area ── */}
-          <div className="grid min-h-[560px] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 bg-paper-base p-4 sm:p-5">
+          <div className="grid min-h-[400px] sm:min-h-[560px] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 bg-paper-base p-4 sm:p-5">
 
             {/* Header */}
             <div className="rounded-xl border-2 border-black bg-accent-blue p-4 shadow-brutal-sm">

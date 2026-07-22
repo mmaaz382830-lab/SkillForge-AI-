@@ -20,7 +20,7 @@ export function FileDropzone({
   return (
     <div
       className={cn(
-        "rounded-xl border-2 border-dashed border-black bg-paper-base p-6 shadow-brutal",
+        "rounded-xl border-2 border-dashed border-black bg-paper-base p-4 sm:p-6 shadow-brutal",
         className,
       )}
     >
@@ -29,7 +29,7 @@ export function FileDropzone({
           UP
         </div>
         <div>
-          <h3 className="text-2xl font-black">{title}</h3>
+          <h3 className="text-xl sm:text-2xl font-black">{title}</h3>
           <p className="mt-2 text-base font-medium leading-7">{description}</p>
         </div>
         <div className="flex flex-wrap gap-2">

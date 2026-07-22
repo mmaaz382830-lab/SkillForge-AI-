@@ -56,7 +56,7 @@ function ProgressContent({ data }: ProgressContentProps) {
         <h2 className="mb-4 font-heading text-xl font-black">
           Learning summary
         </h2>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <DashboardStatCard
             accent="green"
             label="Tasks completed"

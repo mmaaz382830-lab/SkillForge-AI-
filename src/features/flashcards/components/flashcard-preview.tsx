@@ -49,12 +49,12 @@ export function FlashcardPreview({
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-2 sm:flex sm:flex-wrap sm:gap-3">
         <button
           type="button"
           disabled
           aria-disabled="true"
-          className="pressable min-w-36 flex-1 rounded-md border-2 border-black bg-accent-green px-4 py-2.5 font-black shadow-brutal-sm"
+          className="pressable min-h-11 min-w-36 flex-1 rounded-md border-2 border-black bg-accent-green px-4 py-2.5 font-black shadow-brutal-sm"
         >
           Show answer
         </button>
@@ -62,7 +62,7 @@ export function FlashcardPreview({
           type="button"
           disabled
           aria-disabled="true"
-          className="pressable rounded-md border-2 border-black bg-paper-muted px-4 py-2.5 font-black shadow-brutal-sm"
+          className="pressable min-h-11 rounded-md border-2 border-black bg-paper-muted px-4 py-2.5 font-black shadow-brutal-sm"
         >
           ← Prev
         </button>
@@ -70,7 +70,7 @@ export function FlashcardPreview({
           type="button"
           disabled
           aria-disabled="true"
-          className="pressable rounded-md border-2 border-black bg-paper-muted px-4 py-2.5 font-black shadow-brutal-sm"
+          className="pressable min-h-11 rounded-md border-2 border-black bg-paper-muted px-4 py-2.5 font-black shadow-brutal-sm"
         >
           Next →
         </button>

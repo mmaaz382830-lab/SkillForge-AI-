@@ -26,12 +26,12 @@ export function Tabs({ items, defaultValue, className }: TabsProps) {
 
   return (
     <div className={cn("grid min-w-0 max-w-full gap-4", className)}>
-      <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-3" role="tablist">
+      <div className="flex min-w-0 gap-2 overflow-x-auto" role="tablist">
         {items.map((item) => (
           <button
             aria-selected={item.id === activeId}
             className={cn(
-              "min-w-0 whitespace-normal rounded-md border-2 border-black px-3 py-2 font-black shadow-brutal-sm",
+              "min-w-0 shrink-0 whitespace-normal rounded-md border-2 border-black px-3 py-2.5 min-h-11 font-black shadow-brutal-sm",
               item.id === activeId ? "bg-accent-yellow" : "bg-paper-base",
             )}
             key={item.id}

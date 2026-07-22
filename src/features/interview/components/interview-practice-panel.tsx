@@ -340,11 +340,11 @@ export function InterviewPracticePanel({
 
           {allAnswered ? <CompletionState state={practiceState} /> : null}
 
-          <div className="flex flex-wrap gap-2" aria-label="Question navigation">
+          <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Question navigation">
             {practiceState.questions.map((question, index) => (
               <button
                 aria-current={index === currentIndex ? "step" : undefined}
-                className={`min-h-11 rounded-md border-2 border-black px-3 py-2 text-sm font-black shadow-brutal-sm transition hover:-translate-y-0.5 hover:shadow-brutal ${
+                className={`min-h-11 shrink-0 rounded-md border-2 border-black px-3 py-2 text-sm font-black shadow-brutal-sm transition hover:-translate-y-0.5 hover:shadow-brutal ${
                   index === currentIndex
                     ? "bg-accent-pink"
                     : question.answered

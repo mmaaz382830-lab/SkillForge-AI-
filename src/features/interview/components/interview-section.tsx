@@ -165,7 +165,7 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
   return (
     <section aria-labelledby="interview-heading" className="grid gap-5">
       <div className="brutal-card p-5 sm:p-6">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(360px,1.15fr)] xl:items-start">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] xl:items-start">
           <div>
             <p className="text-xs font-black uppercase text-zinc-500">
               Mock interview
@@ -224,7 +224,7 @@ export function InterviewSection({ sessions, materials }: InterviewSectionProps)
           title="No interview sessions yet."
         />
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
+        <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
           <aside className="brutal-card grid gap-3 p-4" aria-label="Interview sessions">
             <h3 className="font-heading text-xl font-black">Sessions</h3>
             {visibleSessions.map((session) => {

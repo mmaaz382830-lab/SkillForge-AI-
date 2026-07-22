@@ -8,7 +8,7 @@ export function Skeleton({ className, ...props }: SkeletonProps) {
     <div
       aria-hidden="true"
       className={cn(
-        "rounded-md border-2 border-black bg-paper-muted shadow-brutal-sm",
+        "max-w-full rounded-md border-2 border-black bg-paper-muted shadow-brutal-sm",
         className,
       )}
       {...props}

@@ -109,7 +109,7 @@ export function RoadmapCard({
             value={roadmap.progress_percentage}
           />
 
-          <dl className="grid gap-2 text-sm font-semibold sm:grid-cols-3">
+          <dl className="grid gap-2 text-sm font-semibold sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-md border-2 border-black bg-paper-muted px-3 py-2">
               <dt className="text-xs font-black uppercase text-zinc-500">Goal</dt>
               <dd>{roadmap.goal_title ?? "No linked goal"}</dd>
